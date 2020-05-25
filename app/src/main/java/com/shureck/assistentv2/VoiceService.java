@@ -142,6 +142,7 @@ public class VoiceService extends Service {
             ArrayList data = results.getStringArrayList(SpeechRecognizer.RESULTS_RECOGNITION);
             String sp = data.get(0).toString();
 
+
             int r0 = sp.compareTo("Тест");
 
             if (r0 == 0) {
