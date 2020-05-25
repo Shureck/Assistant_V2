@@ -1,0 +1,7 @@
+<resources>
+    <string name="app_name">Assistent v2</string>
+    <string name="connected_d">Connected devices</string>
+    <string name="textview">Test</string>
+    <string name="name">Test</string>
+    <string name="descr">Test</string>
+</resources>
