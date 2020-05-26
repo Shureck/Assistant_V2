@@ -47,7 +47,6 @@ public class VoiceService extends Service {
                 if (status == TextToSpeech.SUCCESS) {
                     Locale locale = new Locale("ru");
                     int result = tts.setLanguage(locale);
-
                     tts.setPitch(1.3f); //1.3f
                     tts.setSpeechRate(0.7f);
                 } else if (status == TextToSpeech.ERROR) {
