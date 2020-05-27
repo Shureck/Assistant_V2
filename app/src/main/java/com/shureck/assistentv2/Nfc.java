@@ -39,6 +39,7 @@ import androidx.annotation.NonNull;
 import androidx.annotation.RequiresApi;
 import androidx.appcompat.app.AppCompatActivity;
 import androidx.fragment.app.DialogFragment;
+import androidx.localbroadcastmanager.content.LocalBroadcastManager;
 import androidx.recyclerview.widget.RecyclerView;
 
 import com.google.android.gms.common.api.GoogleApiClient;
@@ -107,11 +108,12 @@ public class Nfc extends AppCompatActivity{
     public ArrayList<Nfc_struct> nfc_list = new ArrayList<>();
     public EditText name_t, descr_t;
     public Button del_dt, add_bt;
-    public RecyclerView nfc_list_v;
+    public RecyclerView nfc_list_v;  //todo Убрать RecyclerView
     public SharedPreferences appSharedPrefs;
     public SharedPreferences.Editor prefsEditor;
     public Gson gson = new Gson();
     public DialogFragment dialogFragment;
+    public boolean bt_pressed = false;
 
 
     RecyclerView.LayoutManager RecyclerViewLayoutManager;
@@ -127,7 +129,7 @@ public class Nfc extends AppCompatActivity{
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.nfc);
-
+        System.out.println("onCreate");
         im_init();
 
         appSharedPrefs = PreferenceManager.getDefaultSharedPreferences(getApplicationContext());
@@ -195,6 +197,19 @@ public class Nfc extends AppCompatActivity{
             }
         });
         add_bt.setOnClickListener(add_bt_onClick);
+
+        LocalBroadcastManager.getInstance(getApplicationContext()).registerReceiver(new BroadcastReceiver() {
+            @Override
+            public void onReceive(Context context, Intent intent) {
+                if(bt_pressed == true){
+                    System.out.println("onReceive");
+                    String tag_str = intent.getStringExtra("Result");
+
+                    prefsEditor.putString("NfcTag", tag_str);
+                    prefsEditor.commit();
+                }
+            }
+        },new IntentFilter("nfc_tag"));
     }
 
     @Override protected void onNewIntent(Intent intent) {
@@ -210,40 +225,7 @@ public class Nfc extends AppCompatActivity{
         @Override
         public void onClick(View v) {
             if(!name_t.getText().toString().equals("")){
-                nfcAdapter.enableReaderMode(Nfc.this, new NfcAdapter.ReaderCallback() {
-                    @Override
-                    public void onTagDiscovered(Tag tag) {
-                        System.out.println("$$$$$$$$$$$$$$$$ money $$$$$$$$$$$$$$$$ " + bin2hex(tag.getId()));
-                        boolean check = false;
-                        for(int i=0; i<nfc_list.size();i++){
-                            if(nfc_list.get(i).uid.equals(bin2hex(tag.getId()))){
-                                check = true;
-                                break;
-                            }
-                        }
-                        if(check == false){
-                            nfc_list.add(new Nfc_struct(bin2hex(tag.getId()), name_t.getText().toString(), descr_t.getText().toString()));
-                            nfcVAdapter = new NfcVAdapter(Nfc.this, nfc_list);
-
-                            runOnUiThread(new Runnable() {
-                                @Override
-                                public void run() {
-                                    nfc_list_v.setAdapter(nfcVAdapter);
-                                }
-                            });
-
-                            String json = gson.toJson(nfc_list);
-                            Log.d("TAG","json = " + json);
-                            prefsEditor.putString("MyObject", json);
-                            prefsEditor.commit();
-
-                            name_t.setText("");
-                            descr_t.setText("");
-
-                        }
-                        nfcAdapter.disableReaderMode(Nfc.this);
-                    }
-                }, NfcAdapter.FLAG_READER_NFC_A, null);
+                bt_pressed = true;
             }
         }
     };
@@ -366,4 +348,71 @@ public class Nfc extends AppCompatActivity{
             }
         });
     }
+
+    @Override
+    protected void onDestroy() {
+        super.onDestroy();
+        Log.d("TAG","onDestroy");
+        System.out.println("onDestroy");
+    }
+
+    @Override
+    protected void onPause() {
+        super.onPause();
+        Log.d("TAG","onPause");
+        System.out.println("onPause");
+    }
+
+    @Override
+    protected void onResume() {
+        super.onResume();
+        String savedText = appSharedPrefs.getString("NfcTag", "");
+        System.out.println("onResume "+savedText);
+        Log.d("TAG","onResume "+savedText);
+        nfc_list = new ArrayList<>();
+        String savedT = appSharedPrefs.getString("MyObject", "");
+        Type type = new TypeToken<ArrayList<Nfc_struct>>() {
+        }.getType();
+        nfc_list = gson.fromJson(savedT, type);
+        if(bt_pressed == true) {
+
+            if (savedText != "") {
+                if (savedText.length() > 0) {
+                    System.out.println("$$$$$$$$$$$$$$$$ money $$$$$$$$$$$$$$$$ " + savedText);
+                    boolean check = false;
+                    if (nfc_list != null) {
+                        for (int i = 0; i < nfc_list.size(); i++) {
+                            if (nfc_list.get(i).uid.equals(savedText)) {
+                                check = true;
+                                break;
+                            }
+                        }
+                    }
+                    if (check == false) {
+
+                        nfc_list.add(new Nfc_struct(savedText, name_t.getText().toString(), descr_t.getText().toString()));
+                        nfcVAdapter = new NfcVAdapter(Nfc.this, nfc_list);
+
+                        runOnUiThread(new Runnable() {
+                            @Override
+                            public void run() {
+                                nfc_list_v.setAdapter(nfcVAdapter);
+                            }
+                        });
+
+                        String json = gson.toJson(nfc_list);
+                        Log.d("TAG", "json = " + json);
+                        prefsEditor.putString("MyObject", json);
+                        prefsEditor.commit();
+
+                        name_t.setText("");
+                        descr_t.setText("");
+
+                        bt_pressed = false;
+                    }
+                }
+            }
+        }
+    }
+
 }
