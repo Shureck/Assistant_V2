@@ -206,7 +206,8 @@
         android:layout_height="45dp"
         android:layout_marginTop="38dp"
         app:layout_constraintStart_toEndOf="@+id/textView2"
-        app:layout_constraintTop_toTopOf="parent" />
+        app:layout_constraintTop_toTopOf="parent"
+        android:entries="@array/metrics"/>
 
     <TextView
         android:id="@+id/textView4"

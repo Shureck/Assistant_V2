@@ -7,9 +7,11 @@ import android.content.IntentFilter;
 import android.os.Build;
 import android.os.Bundle;
 import android.view.View;
+import android.widget.ArrayAdapter;
 import android.widget.Button;
 import android.widget.ImageView;
 import android.widget.SeekBar;
+import android.widget.Spinner;
 import android.widget.TextView;
 import android.widget.Toast;
 
@@ -29,6 +31,7 @@ public class Rangefinder extends AppCompatActivity{
     public TextView dist_text, seekText1, seekText2, seekText3, seekText4;
     public SeekBar seekBar1, seekBar2, seekBar3, seekBar4;
     public Button accebt_bt;
+    public Spinner spinner;
 
     @Override
     protected void onCreate(@Nullable Bundle savedInstanceState) {
@@ -54,7 +57,19 @@ public class Rangefinder extends AppCompatActivity{
         seekBar3.setOnSeekBarChangeListener(seecListner);
         seekBar4.setOnSeekBarChangeListener(seecListner);
 
+        spinner = (Spinner) findViewById(R.id.spinner);
+        ArrayAdapter<?> adapter =
+                ArrayAdapter.createFromResource(this, R.array.metrics, R.layout.spinner_item);
+        adapter.setDropDownViewResource(android.R.layout.simple_spinner_dropdown_item);
+
+        spinner.setAdapter(adapter);
+
         im_init();
+
+        seekText1.setText(String.valueOf(seekBar1.getProgress()));
+        seekText2.setText(String.valueOf(seekBar2.getProgress()));
+        seekText3.setText(String.valueOf(seekBar3.getProgress()));
+        seekText4.setText(String.valueOf(seekBar4.getProgress()));
 
         LocalBroadcastManager.getInstance(getApplicationContext()).registerReceiver(new BroadcastReceiver() {
             @Override
@@ -69,7 +84,23 @@ public class Rangefinder extends AppCompatActivity{
                     hesh_sum = (char) (hesh_sum % 127);
                     if(hesh_sum == s.charAt(s.length()-2)) {
                         if ((s.charAt(0) == (char)102) && (s.charAt(1) == (char)85)) {
-                            dist_text.setText(String.valueOf((int)s.charAt(2)));
+                            if(s.charAt(2) == (char)66){
+                                dist_text.setText("NaN");
+                            }
+                            else{
+                                dist_text.setText(String.valueOf((int) s.charAt(2)));
+                            }
+                        }
+                        if ((s.charAt(0) == (char)100) && (s.charAt(1) == (char)85)) {
+                            seekBar1.setProgress((int) s.charAt(2));
+                            seekBar2.setProgress((int) s.charAt(3));
+                            seekBar3.setProgress((int) s.charAt(4));
+                            seekBar4.setProgress((int) s.charAt(5));
+
+                            seekText1.setText(String.valueOf(seekBar1.getProgress()));
+                            seekText2.setText(String.valueOf(seekBar2.getProgress()));
+                            seekText3.setText(String.valueOf(seekBar3.getProgress()));
+                            seekText4.setText(String.valueOf(seekBar4.getProgress()));
                         }
                     }
                 }
@@ -80,7 +111,7 @@ public class Rangefinder extends AppCompatActivity{
             @RequiresApi(api = Build.VERSION_CODES.KITKAT)
             @Override
             public void onClick(View v) {
-                String ss = new String();
+                String s = new String();
                 char data[] = new char[8];
                 data[0] = (char) 85;  //0x55
                 data[1] = (char) 102;  //0x66
@@ -89,12 +120,19 @@ public class Rangefinder extends AppCompatActivity{
                 data[4] = (char) seekBar3.getProgress();
                 data[5] = (char) seekBar4.getProgress();
                 data[6] = (char) ((85+102+seekBar1.getProgress()+seekBar2.getProgress()+seekBar3.getProgress()+seekBar4.getProgress()) % 127);
-                data[7] = (char) '!';
+                data[7] = (char) 33;
 
                 App.sendLocalBroadcastMessage("Операция2", new String(data));
             }
         });
 
+        char data[] = new char[5];
+        data[0] = (char) 85;  //0x55
+        data[1] = (char) 100;
+        data[2] = (char) 63;
+        data[3] = (char) ((85+100+63) % 127);
+        data[4] = (char) 33;
+        App.sendLocalBroadcastMessage("Операция2", new String(data));
     }
 
     public static byte[] hexStringToByteArray(String hex) {
@@ -115,6 +153,7 @@ public class Rangefinder extends AppCompatActivity{
             public void onClick(View v) {
                 Intent intent = new Intent(Rangefinder.this, Settings.class);
                 startActivity(intent);
+                overridePendingTransition(R.anim.slidein, R.anim.slideout);
             }
         });
 
@@ -125,6 +164,7 @@ public class Rangefinder extends AppCompatActivity{
             public void onClick(View v) {
                 Intent intent = new Intent(Rangefinder.this, Nfc.class);
                 startActivity(intent);
+                overridePendingTransition(R.anim.in_right, R.anim.out_right);
             }
         });
 
@@ -135,6 +175,7 @@ public class Rangefinder extends AppCompatActivity{
             public void onClick(View v) {
                 Intent intent = new Intent(Rangefinder.this, MainActivity.class);
                 startActivity(intent);
+                overridePendingTransition(R.anim.slidein, R.anim.slideout);
             }
         });
 
@@ -145,6 +186,7 @@ public class Rangefinder extends AppCompatActivity{
             public void onClick(View v) {
                 Intent intent = new Intent(Rangefinder.this, Gps.class);
                 startActivity(intent);
+                overridePendingTransition(R.anim.slidein, R.anim.slideout);
             }
         });
     }

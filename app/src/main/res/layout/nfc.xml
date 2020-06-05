@@ -11,10 +11,12 @@
         android:layout_width="match_parent"
         android:layout_height="0dp"
         android:layout_marginTop="16dp"
+        android:layout_marginBottom="16dp"
         android:clickable="true"
         android:isScrollContainer="true"
         android:keepScreenOn="false"
         app:layoutManager="LinearLayoutManager"
+        app:layout_constraintBottom_toTopOf="@+id/editText"
         app:layout_constraintEnd_toEndOf="parent"
         app:layout_constraintStart_toStartOf="parent"
         app:layout_constraintTop_toBottomOf="@+id/textView12" />
@@ -25,7 +27,7 @@
         android:layout_height="wrap_content"
         android:layout_marginEnd="2dp"
         android:layout_marginRight="2dp"
-        android:text="Button"
+        android:text="Добавить"
         app:layout_constraintBottom_toBottomOf="@+id/editText3"
         app:layout_constraintEnd_toEndOf="parent"
         app:layout_constraintTop_toTopOf="@+id/editText3" />
@@ -38,6 +40,7 @@
         android:layout_marginLeft="16dp"
         android:layout_marginBottom="16dp"
         android:hint="Описание"
+        android:inputType="textLongMessage|textAutoCorrect|textCapSentences|textAutoComplete"
         app:layout_constraintBottom_toTopOf="@+id/line_1"
         app:layout_constraintStart_toStartOf="parent" />
 
@@ -49,6 +52,7 @@
         android:layout_marginLeft="16dp"
         android:layout_marginBottom="108dp"
         android:hint="Название метки"
+        android:inputType="textShortMessage|textAutoCorrect|textCapSentences|textAutoComplete"
         app:layout_constraintBottom_toTopOf="@+id/line_1"
         app:layout_constraintStart_toStartOf="parent" />
 
@@ -151,16 +155,5 @@
         app:layout_constraintEnd_toStartOf="@+id/imageView"
         app:srcCompat="@drawable/length_sh"
         />
-
-    <Button
-        android:id="@+id/button2"
-        android:layout_width="wrap_content"
-        android:layout_height="wrap_content"
-        android:layout_marginTop="16dp"
-        android:layout_marginEnd="32dp"
-        android:layout_marginRight="32dp"
-        android:text="Удалить"
-        app:layout_constraintEnd_toEndOf="parent"
-        app:layout_constraintTop_toBottomOf="@+id/rec_v_nfc" />
 
 </androidx.constraintlayout.widget.ConstraintLayout>

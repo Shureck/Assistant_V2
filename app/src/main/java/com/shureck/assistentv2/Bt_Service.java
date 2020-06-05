@@ -60,7 +60,7 @@ public class Bt_Service extends Service {
                         if (endOfLineIndex > 0) {                                            // если встречаем конец строки,
                             String sbprint = sb.substring(0, endOfLineIndex);               // то извлекаем строку
                             sb.delete(0, sb.length());                                      // и очищаем sb
-                            Toast.makeText(Bt_Service.this,"Ответ от Arduino: " + sbprint, Toast.LENGTH_LONG).show();             // обновляем TextView
+                            //Toast.makeText(Bt_Service.this,"Ответ от Arduino: " + sbprint, Toast.LENGTH_LONG).show();             // обновляем TextView
                             App.sendLocalBroadcastMessage("Операция1",sbprint);
                         }
                         //Log.d(TAG, "...Строка:"+ sb.toString() +  "Байт:" + msg.arg1 + "...");

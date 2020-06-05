@@ -56,7 +56,7 @@ public class TagActivity extends AppCompatActivity {
             if (nfc_list != null) {
                 for (int i = 0; i < nfc_list.size(); i++) {
                     if (nfc_list.get(i).uid.equals(bin2hex(myTag.getId()))) {
-                        App.sendLocalBroadcastMessage("nfc_rec", nfc_list.get(i).name + nfc_list.get(i).descrip);
+                        App.sendLocalBroadcastMessage("nfc_rec", nfc_list.get(i).name + ". " + nfc_list.get(i).descrip);
                         break;
                     }
                 }

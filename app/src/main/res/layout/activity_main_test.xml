@@ -28,16 +28,17 @@
         android:layout_marginLeft="12dp"
         android:layout_marginBottom="16dp"
         android:hint="Введите запрос"
+        android:inputType="textLongMessage|textAutoCorrect|textMultiLine|textCapSentences|textAutoComplete"
         app:layout_constraintBottom_toTopOf="@+id/constraintLayout"
         app:layout_constraintStart_toStartOf="parent" />
 
     <Button
         android:id="@+id/button"
-        android:layout_width="wrap_content"
-        android:layout_height="wrap_content"
-        android:layout_marginStart="8dp"
-        android:layout_marginLeft="8dp"
-        android:text="Send"
+        android:layout_width="55dp"
+        android:layout_height="55dp"
+        android:layout_marginStart="24dp"
+        android:layout_marginLeft="24dp"
+        android:background="@drawable/gfgf"
         app:layout_constraintBottom_toBottomOf="@+id/EditText"
         app:layout_constraintStart_toEndOf="@+id/EditText"
         app:layout_constraintTop_toTopOf="@+id/EditText" />

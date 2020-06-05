@@ -58,6 +58,7 @@
                 android:showDividers="middle">
 
                 <Switch
+                    android:id="@+id/isSpeak"
                     android:layout_width="69dp"
                     android:layout_height="70dp"
                     android:layout_marginLeft="-10dp"

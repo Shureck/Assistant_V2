@@ -107,7 +107,7 @@ public class Nfc extends AppCompatActivity{
     NfcVAdapter nfcVAdapter;
     public ArrayList<Nfc_struct> nfc_list = new ArrayList<>();
     public EditText name_t, descr_t;
-    public Button del_dt, add_bt;
+    public Button add_bt;
     public RecyclerView nfc_list_v;  //todo Убрать RecyclerView
     public SharedPreferences appSharedPrefs;
     public SharedPreferences.Editor prefsEditor;
@@ -138,7 +138,6 @@ public class Nfc extends AppCompatActivity{
         name_t = (EditText) findViewById(R.id.editText);
         descr_t = (EditText) findViewById(R.id.editText3);
 
-        del_dt = (Button) findViewById(R.id.button2);
         add_bt = (Button) findViewById(R.id.button5);
 
         nfc_list_v = (RecyclerView) findViewById(R.id.rec_v_nfc);
@@ -251,7 +250,7 @@ public class Nfc extends AppCompatActivity{
 
         builder.setView(view)
                 // Add action buttons
-                .setPositiveButton("Signin", new DialogInterface.OnClickListener() {
+                .setPositiveButton("Применить", new DialogInterface.OnClickListener() {
                     @Override
                     public void onClick(DialogInterface dialog, int id) {
                         Dialog dialogView = (Dialog) dialog;
@@ -279,12 +278,12 @@ public class Nfc extends AppCompatActivity{
 
                     }
                 })
-                .setNegativeButton("Cancel", new DialogInterface.OnClickListener() {
+                .setNegativeButton("Отмена", new DialogInterface.OnClickListener() {
                     public void onClick(DialogInterface dialog, int id) {
 
                     }
                 })
-                .setNeutralButton("Delite", new DialogInterface.OnClickListener() {
+                .setNeutralButton("Удалить", new DialogInterface.OnClickListener() {
                     @Override
                     public void onClick(DialogInterface dialog, int which) {
                         nfc_list.remove(pos);
@@ -315,6 +314,7 @@ public class Nfc extends AppCompatActivity{
             public void onClick(View v) {
                 Intent intent = new Intent(Nfc.this, Settings.class);
                 startActivity(intent);
+                overridePendingTransition(R.anim.slidein, R.anim.slideout);
             }
         });
 
@@ -325,6 +325,7 @@ public class Nfc extends AppCompatActivity{
             public void onClick(View v) {
                 Intent intent = new Intent(Nfc.this, MainActivity.class);
                 startActivity(intent);
+                overridePendingTransition(R.anim.slidein, R.anim.slideout);
             }
         });
 
@@ -335,6 +336,7 @@ public class Nfc extends AppCompatActivity{
             public void onClick(View v) {
                 Intent intent = new Intent(Nfc.this, Rangefinder.class);
                 startActivity(intent);
+                overridePendingTransition(R.anim.slidein, R.anim.slideout);
             }
         });
 
@@ -345,6 +347,7 @@ public class Nfc extends AppCompatActivity{
             public void onClick(View v) {
                 Intent intent = new Intent(Nfc.this, Gps.class);
                 startActivity(intent);
+                overridePendingTransition(R.anim.slidein, R.anim.slideout);
             }
         });
     }

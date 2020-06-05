@@ -6,13 +6,17 @@ import android.bluetooth.BluetoothDevice;
 import android.bluetooth.BluetoothSocket;
 import android.content.DialogInterface;
 import android.content.Intent;
+import android.content.SharedPreferences;
 import android.os.Bundle;
 import android.os.Handler;
+import android.preference.PreferenceManager;
 import android.util.Log;
 import android.view.View;
+import android.widget.CompoundButton;
 import android.widget.ImageView;
 import android.widget.LinearLayout;
 import android.widget.ListView;
+import android.widget.Switch;
 import android.widget.Toast;
 
 import androidx.appcompat.app.AppCompatActivity;
@@ -39,7 +43,10 @@ public class Settings extends AppCompatActivity {
     public ListView countriesList;
     public ArrayList<String> mArrayAdapter;
     public ArrayList<BluetoothDevice> tmpBtChecker = new ArrayList<>();
+    public Switch mSwitch;
 
+    public SharedPreferences appSharedPrefs;
+    public SharedPreferences.Editor prefsEditor;
 
     public AlertDialog dialog;
     public LinearLayout set_menu, set_voice;
@@ -51,6 +58,11 @@ public class Settings extends AppCompatActivity {
         setContentView(R.layout.settings);
 
         im_init();
+
+        appSharedPrefs = PreferenceManager.getDefaultSharedPreferences(getApplicationContext());
+        prefsEditor = appSharedPrefs.edit();
+        boolean isSp = appSharedPrefs.getBoolean("isSpeak", false);
+
         set_menu = (LinearLayout) findViewById(R.id.list_bt);
         set_voice = (LinearLayout) findViewById(R.id.lin_ask);
         btAdapter = BluetoothAdapter.getDefaultAdapter();
@@ -58,7 +70,8 @@ public class Settings extends AppCompatActivity {
 //        mArrayAdapter.notifyDataSetChanged();
 //        countriesList.setAdapter(mArrayAdapter);
         mArrayAdapter = new ArrayList<>();
-
+        mSwitch = (Switch) findViewById(R.id.isSpeak);
+        mSwitch.setChecked(isSp);
         /*
         h = new Handler() {
             public void handleMessage(android.os.Message msg) {
@@ -80,13 +93,25 @@ public class Settings extends AppCompatActivity {
         };
         */
 
+        mSwitch.setOnCheckedChangeListener(new CompoundButton.OnCheckedChangeListener() {
+            public void onCheckedChanged(CompoundButton buttonView, boolean isChecked) {
+                if (isChecked) {
+                    System.out.println("++++++++++++++++++++++++++++++++++++");
+                    prefsEditor.putBoolean("isSpeak", true);
+                    prefsEditor.commit();
+                    App.sendLocalBroadcastMessage("VS_call","isSpeak"+true);
+                } else {
+                    System.out.println("------------------------------------");
+                    prefsEditor.putBoolean("isSpeak", false);
+                    prefsEditor.commit();
+                    App.sendLocalBroadcastMessage("VS_call","isSpeak"+false);
+                }
+            }
+        });
 
         set_voice.setOnClickListener(new View.OnClickListener() {
              @Override
              public void onClick(View v) {
-
-                 mConnectedThread.write("Lol 1");
-                 mConnectedThread.write(String.valueOf(new char[]{'0','1','!'}));
 
              }
         });
@@ -191,6 +216,7 @@ public class Settings extends AppCompatActivity {
             public void onClick(View v) {
                 Intent intent = new Intent(Settings.this, MainActivity.class);
                 startActivity(intent);
+                overridePendingTransition(R.anim.in_right, R.anim.out_right);
             }
         });
 
@@ -201,6 +227,7 @@ public class Settings extends AppCompatActivity {
             public void onClick(View v) {
                 Intent intent = new Intent(Settings.this, Nfc.class);
                 startActivity(intent);
+                overridePendingTransition(R.anim.in_right, R.anim.out_right);
             }
         });
 
@@ -211,6 +238,7 @@ public class Settings extends AppCompatActivity {
             public void onClick(View v) {
                 Intent intent = new Intent(Settings.this, Rangefinder.class);
                 startActivity(intent);
+                overridePendingTransition(R.anim.in_right, R.anim.out_right);
             }
         });
 
@@ -221,6 +249,7 @@ public class Settings extends AppCompatActivity {
             public void onClick(View v) {
                 Intent intent = new Intent(Settings.this, Gps.class);
                 startActivity(intent);
+                overridePendingTransition(R.anim.in_right, R.anim.out_right);
             }
         });
     }

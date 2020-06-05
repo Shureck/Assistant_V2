@@ -9,4 +9,12 @@
     <string name="permission_listener_null_exception_text">OnSpeechRecognitionPermissionListener has not been initialized</string>
     <string name="speech_listener_null_exception_text">OnSpeechRecognitionListener has not been initialized</string>
     <string name="speech_not_enabled_exception_text">Speech Recognition is not available on this device</string>
+
+    <string-array name="metrics">
+        <item>См</item>
+        <item>М</item>
+        <item>Дюйм</item>
+        <item>Сун</item>
+        <item>Фут</item>
+    </string-array>
 </resources>

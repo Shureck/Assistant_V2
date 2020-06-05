@@ -14,7 +14,6 @@
         android:layout_marginStart="40dp"
         android:layout_marginLeft="40dp"
         android:layout_marginTop="20dp"
-        android:text="@string/textview"
         app:layout_constraintStart_toStartOf="parent"
         app:layout_constraintTop_toBottomOf="@+id/textView" />
 
@@ -25,6 +24,7 @@
         android:layout_marginStart="40dp"
         android:layout_marginLeft="40dp"
         android:layout_marginTop="20dp"
+        android:inputType="textShortMessage|textAutoCorrect|textCapSentences|textAutoComplete"
         app:layout_constraintStart_toStartOf="parent"
         app:layout_constraintTop_toBottomOf="@+id/map" />
 
@@ -37,7 +37,6 @@
         android:layout_marginTop="20dp"
         android:layout_marginEnd="36dp"
         android:layout_marginRight="36dp"
-        android:text="@string/textview"
         app:layout_constraintEnd_toEndOf="parent"
         app:layout_constraintStart_toStartOf="parent"
         app:layout_constraintTop_toBottomOf="@+id/textView2" />
@@ -159,11 +158,11 @@
 
     <Button
         android:id="@+id/button4"
-        android:layout_width="60dp"
+        android:layout_width="75dp"
         android:layout_height="46dp"
-        android:layout_marginStart="8dp"
-        android:layout_marginLeft="8dp"
-        android:text="Find"
+        android:layout_marginStart="4dp"
+        android:layout_marginLeft="4dp"
+        android:text="Найти"
         app:layout_constraintBottom_toBottomOf="@+id/editText2"
         app:layout_constraintStart_toEndOf="@+id/editText2"
         app:layout_constraintTop_toTopOf="@+id/editText2" />

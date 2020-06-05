@@ -1,6 +1,7 @@
 package com.shureck.assistentv2;
 
 import android.Manifest;
+import android.content.Context;
 import android.content.Intent;
 import android.content.pm.PackageManager;
 import android.graphics.Color;
@@ -11,6 +12,8 @@ import android.hardware.SensorManager;
 import android.location.Address;
 import android.location.Geocoder;
 import android.location.Location;
+import android.location.LocationListener;
+import android.location.LocationManager;
 import android.os.AsyncTask;
 import android.os.Bundle;
 import android.util.Log;
@@ -24,9 +27,12 @@ import android.widget.Toast;
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
 import androidx.appcompat.app.AppCompatActivity;
+import androidx.core.app.ActivityCompat;
 import androidx.core.content.ContextCompat;
 import androidx.fragment.app.FragmentActivity;
 
+import com.google.android.gms.maps.CameraUpdate;
+import com.google.android.gms.maps.CameraUpdateFactory;
 import com.google.android.gms.maps.GoogleMap;
 import com.google.android.gms.maps.OnMapReadyCallback;
 import com.google.android.gms.maps.SupportMapFragment;
@@ -71,6 +77,8 @@ public class Gps extends AppCompatActivity
     public double rotationInDegrees;
     public boolean hasGravityData, hasGeomagneticData;
     public static Geocoder geocoder;
+    public LocationManager locationManager;
+    public LocationListener locationListener;
 
     @Override
     protected void onCreate(@Nullable Bundle savedInstanceState) {
@@ -88,6 +96,10 @@ public class Gps extends AppCompatActivity
         textView3 = findViewById(R.id.textView3);
         editText = findViewById(R.id.editText2);
         find_bt = findViewById(R.id.button4);
+
+        locationManager = (LocationManager) getSystemService(Context.LOCATION_SERVICE);
+        locationListener = ll;
+
         SensorEventListener listener = new SensorEventListener() {
 
             @Override
@@ -116,7 +128,7 @@ public class Gps extends AppCompatActivity
                         SensorManager.getOrientation(rotationMatrix, orientationMatrix);
                         float rotationInRadians = orientationMatrix[0];
                         rotationInDegrees = ((Math.toDegrees(rotationInRadians)+360)%360);
-                        textView.setText(String.valueOf(rotationInDegrees)+" deg");
+                        textView.setText(String.format("%.2f", rotationInDegrees)+" deg");
                         //System.out.println("&&&&&&&&&&&&&&&&&&&& " + rotationInDegrees);
                         // do something with the rotation in degrees
                     }
@@ -139,6 +151,10 @@ public class Gps extends AppCompatActivity
                 String s = editText.getText().toString();
                 try {
                     List<Address> address = geocoder.getFromLocationName(s, 3);
+                    mMap.addMarker(new MarkerOptions().position(new LatLng(address.get(0).getLatitude(), address.get(0).getLongitude())).title("Res"));
+                    LatLng latLng = new LatLng(address.get(0).getLatitude(), address.get(0).getLongitude());
+                    CameraUpdate cameraUpdate = CameraUpdateFactory.newLatLngZoom(latLng, 14);
+                    mMap.animateCamera(cameraUpdate);
                 } catch (IOException e) {
                     e.printStackTrace();
                 }
@@ -196,7 +212,7 @@ public class Gps extends AppCompatActivity
                 }
 
                 // Add new marker to the Google Map Android API V2
-                mMap.addMarker(options);
+                //mMap.addMarker(options);
 
                 // Checks, whether start and end locations are captured
                 if(mMarkerPoints.size() >= 2){
@@ -207,6 +223,7 @@ public class Gps extends AppCompatActivity
 
             }
         });
+        get_location();
     }
 
     @Override
@@ -229,7 +246,7 @@ public class Gps extends AppCompatActivity
             double t_1 = mMap.getMyLocation().getLatitude();// - 0.0005;
             double t_2 = mMap.getMyLocation().getLongitude();// - 0.0005;
 
-            mMap.addMarker(new MarkerOptions().position(new LatLng(t_1, t_2)).title("test"));
+            //mMap.addMarker(new MarkerOptions().position(new LatLng(t_1, t_2)).title("test"));
 
             List<Address> address = geocoder.getFromLocation(t_1,t_2,5);
             System.out.println("$$$$$$$$$$$$$$$$$$$$$$$$ "+ address);
@@ -245,8 +262,8 @@ public class Gps extends AppCompatActivity
             }
             else {
                 Toast.makeText(this, "Successfully", Toast.LENGTH_LONG).show();
-                textView2.setText("Current location:\n" + location.getLatitude() + " " + location.getLongitude());
-                textView3.setText(address.get((int) res[2]).getAddressLine(0) + "\n\n" + res[0] + " m\n" + res[1] + " deg\n");
+                //textView2.setText("Current location:\n" + location.getLatitude() + " " + location.getLongitude());
+                //textView3.setText(address.get((int) res[2]).getAddressLine(0) + "\n\n" + res[0] + " m\n" + res[1] + " deg\n");
                 //mMap.clear();
                 mMap.addMarker(new MarkerOptions().position(new LatLng(address.get((int) res[2]).getLatitude(), address.get((int) res[2]).getLongitude())).title("test"));
             }
@@ -279,6 +296,44 @@ public class Gps extends AppCompatActivity
         // Start downloading json data from Google Directions API
         downloadTask.execute(url);
     }
+
+    public void get_location() {
+        if (ActivityCompat.checkSelfPermission(this, Manifest.permission.ACCESS_FINE_LOCATION) != PackageManager.PERMISSION_GRANTED && ActivityCompat.checkSelfPermission(this, Manifest.permission.ACCESS_COARSE_LOCATION) != PackageManager.PERMISSION_GRANTED) {
+            // TODO: Consider calling
+            //    ActivityCompat#requestPermissions
+            // here to request the missing permissions, and then overriding
+            //   public void onRequestPermissionsResult(int requestCode, String[] permissions,
+            //                                          int[] grantResults)
+            // to handle the case where the user grants the permission. See the documentation
+            // for ActivityCompat#requestPermissions for more details.
+            return;
+        }
+        locationManager.requestSingleUpdate(LocationManager.GPS_PROVIDER, locationListener, null);
+    }
+
+    LocationListener ll = new LocationListener() {
+        @Override
+        public void onLocationChanged(Location location) {
+            LatLng latLng = new LatLng(location.getLatitude(), location.getLongitude());
+            CameraUpdate cameraUpdate = CameraUpdateFactory.newLatLngZoom(latLng, 14);
+            mMap.animateCamera(cameraUpdate);
+        }
+
+        @Override
+        public void onStatusChanged(String provider, int status, Bundle extras) {
+
+        }
+
+        @Override
+        public void onProviderEnabled(String provider) {
+
+        }
+
+        @Override
+        public void onProviderDisabled(String provider) {
+
+        }
+    };
 
     private String getDirectionsUrl(LatLng origin,LatLng dest){
 
@@ -559,6 +614,7 @@ public class Gps extends AppCompatActivity
             public void onClick(View v) {
                 Intent intent = new Intent(Gps.this, Settings.class);
                 startActivity(intent);
+                overridePendingTransition(R.anim.slidein, R.anim.slideout);
             }
         });
 
@@ -569,6 +625,7 @@ public class Gps extends AppCompatActivity
             public void onClick(View v) {
                 Intent intent = new Intent(Gps.this, Nfc.class);
                 startActivity(intent);
+                overridePendingTransition(R.anim.in_right, R.anim.out_right);
             }
         });
 
@@ -579,6 +636,7 @@ public class Gps extends AppCompatActivity
             public void onClick(View v) {
                 Intent intent = new Intent(Gps.this, Rangefinder.class);
                 startActivity(intent);
+                overridePendingTransition(R.anim.in_right, R.anim.out_right);
             }
         });
 
@@ -589,6 +647,7 @@ public class Gps extends AppCompatActivity
             public void onClick(View v) {
                 Intent intent = new Intent(Gps.this, MainActivity.class);
                 startActivity(intent);
+                overridePendingTransition(R.anim.in_right, R.anim.out_right);
             }
         });
     }
