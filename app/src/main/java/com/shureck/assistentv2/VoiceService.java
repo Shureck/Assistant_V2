@@ -2,9 +2,11 @@ package com.shureck.assistentv2;
 
 import android.Manifest;
 import android.annotation.TargetApi;
+import android.app.Activity;
 import android.app.PendingIntent;
 import android.app.Service;
 import android.content.BroadcastReceiver;
+import android.content.ContentValues;
 import android.content.Context;
 import android.content.Intent;
 import android.content.IntentFilter;
@@ -39,6 +41,7 @@ import android.speech.RecognizerIntent;
 import android.speech.SpeechRecognizer;
 import android.speech.tts.TextToSpeech;
 import android.speech.tts.UtteranceProgressListener;
+import android.telephony.SmsManager;
 import android.util.Log;
 import android.view.View;
 import android.widget.AdapterView;
@@ -69,7 +72,7 @@ import java.util.Locale;
 
 import static android.app.Activity.RESULT_OK;
 
-public class VoiceService extends Service implements RecognitionListener, LocationListener {
+public class VoiceService extends Service implements RecognitionListener {
 
     NfcAdapter nfcAdapter;
     NfcVAdapter nfcVAdapter;
@@ -112,7 +115,6 @@ public class VoiceService extends Service implements RecognitionListener, Locati
         }
 
         locationManager = (LocationManager) getSystemService(Context.LOCATION_SERVICE);
-        locationListener = this;
 
         PackageManager packManager = getPackageManager();
         List<ResolveInfo> intActivities = packManager.queryIntentActivities(new
@@ -191,6 +193,7 @@ public class VoiceService extends Service implements RecognitionListener, Locati
 
     private String robo_answer(String ask) {
         ask = ask.toLowerCase();
+        ask = ask.trim();
         if(ask.contains("включи")){
             on_flash();
             return "Фонарик включен";
@@ -200,13 +203,67 @@ public class VoiceService extends Service implements RecognitionListener, Locati
             return "Фонарик выключен";
         }
         if(ask.contains("where")||(ask.contains("где я"))){
-            get_location();
-            return "Определение местоположения...";
+            return "Местоположение: " + get_location();
+        }
+        if(ask.contains("what")||(ask.contains("что это?"))){
+            return "В разработке";
+        }
+        if(ask.contains("sos")||ask.contains("сос")){
+            String sent = "android.telephony.SmsManager.STATUS_ON_ICC_SENT";
+            PendingIntent piSent = PendingIntent.getBroadcast(VoiceService.this, 0,new Intent(sent), 0);
+            sendSMS("89377973353","Я рядом с "+get_location());
+            return "Сообщение отправлено";
         }
         else{
             return "Не удалось обнаружить команду";
         }
     }
+
+    private void sendSMS(String phoneNumber, String message) {
+        String SENT = "SMS_SENT";
+        String DELIVERED = "SMS_DELIVERED";
+        PendingIntent sentPI = PendingIntent.getBroadcast(this, 0, new Intent( SENT), 0);
+        PendingIntent deliveredPI = PendingIntent.getBroadcast(this, 0, new Intent(DELIVERED), 0); // ---when the SMS has been sent---
+        registerReceiver(new BroadcastReceiver() {
+            @Override public void onReceive(Context arg0, Intent arg1) {
+                switch (getResultCode()) {
+                    case Activity.RESULT_OK:
+                        ContentValues values = new ContentValues();
+                        getContentResolver().insert( Uri.parse("content://sms/sent"), values);
+                        Toast.makeText(getBaseContext(), "SMS sent", Toast.LENGTH_SHORT).show();
+                        break;
+                    case SmsManager.RESULT_ERROR_GENERIC_FAILURE:
+                        Toast.makeText(getBaseContext(), "Generic failure", Toast.LENGTH_SHORT).show();
+                        break;
+                    case SmsManager.RESULT_ERROR_NO_SERVICE:
+                        Toast.makeText(getBaseContext(), "No service", Toast.LENGTH_SHORT).show();
+                        break;
+                    case SmsManager.RESULT_ERROR_NULL_PDU:
+                        Toast.makeText(getBaseContext(), "Null PDU", Toast.LENGTH_SHORT).show();
+                        break;
+                    case SmsManager.RESULT_ERROR_RADIO_OFF:
+                        Toast.makeText(getBaseContext(), "Radio off", Toast.LENGTH_SHORT).show();
+                        break;
+                    }
+                }
+            }, new IntentFilter(SENT)); // ---when the SMS has been delivered---
+            registerReceiver(new BroadcastReceiver() {
+                @Override public void onReceive(Context arg0, Intent arg1) {
+                    switch (getResultCode()) {
+                        case Activity.RESULT_OK:
+                            Toast.makeText(getBaseContext(), "SMS delivered", Toast.LENGTH_SHORT).show();
+                            break;
+                        case Activity.RESULT_CANCELED:
+                            Toast.makeText(getBaseContext(), "SMS not delivered", Toast.LENGTH_SHORT).show();
+                            break;
+                        }
+                    }
+                }, new IntentFilter(DELIVERED));
+            SmsManager sms = SmsManager.getDefault();
+            SmsManager smsManager = SmsManager.getDefault();
+            ArrayList<String> parts = smsManager.divideMessage(message);
+            sms.sendMultipartTextMessage(phoneNumber, null, parts, null, null);
+        }
 
     void resolveIntent(Intent intent) {
         // Parse the intent
@@ -280,18 +337,63 @@ public class VoiceService extends Service implements RecognitionListener, Locati
         }).start();
     }
 
-    public void get_location() {
-        if (ActivityCompat.checkSelfPermission(this, Manifest.permission.ACCESS_FINE_LOCATION) != PackageManager.PERMISSION_GRANTED && ActivityCompat.checkSelfPermission(this, Manifest.permission.ACCESS_COARSE_LOCATION) != PackageManager.PERMISSION_GRANTED) {
-            // TODO: Consider calling
-            //    ActivityCompat#requestPermissions
-            // here to request the missing permissions, and then overriding
-            //   public void onRequestPermissionsResult(int requestCode, String[] permissions,
-            //                                          int[] grantResults)
-            // to handle the case where the user grants the permission. See the documentation
-            // for ActivityCompat#requestPermissions for more details.
-            return;
+    public String get_location() {
+        Location loc = getLastKnownLocation();
+
+        String longitude = "Longitude: " + loc.getLongitude();
+        Log.v(LOG_TAG, longitude);
+        String latitude = "Latitude: " + loc.getLatitude();
+        Log.v(LOG_TAG, latitude);
+
+        /*------- To get city name from coordinates -------- */
+        String cityName = null;
+        Geocoder gcd = new Geocoder(getBaseContext(), Locale.getDefault());
+        List<Address> addresses;
+        try {
+            addresses = gcd.getFromLocation(loc.getLatitude(),
+                    loc.getLongitude(), 1);
+            if (addresses.size() > 0) {
+                System.out.println(addresses.get(0).getLocality());
+                cityName = addresses.get(0).getAddressLine(0);
+            }
         }
-        locationManager.requestSingleUpdate(LocationManager.GPS_PROVIDER, locationListener, null);
+        catch (IOException e) {
+            e.printStackTrace();
+        }
+//        String s = longitude + "\n" + latitude + "\n\nМестоположение: "
+//                + cityName;
+
+        String s = cityName;
+
+        Log.v(LOG_TAG, s);
+        return s;
+    }
+
+    private Location getLastKnownLocation() {
+        locationManager = (LocationManager) getApplicationContext().getSystemService(LOCATION_SERVICE);
+        List<String> providers = locationManager.getProviders(true);
+        Location bestLocation = null;
+        for (String provider : providers) {
+            if (ActivityCompat.checkSelfPermission(this, Manifest.permission.ACCESS_FINE_LOCATION) != PackageManager.PERMISSION_GRANTED && ActivityCompat.checkSelfPermission(this, Manifest.permission.ACCESS_COARSE_LOCATION) != PackageManager.PERMISSION_GRANTED) {
+                // TODO: Consider calling
+                //    ActivityCompat#requestPermissions
+                // here to request the missing permissions, and then overriding
+                //   public void onRequestPermissionsResult(int requestCode, String[] permissions,
+                //                                          int[] grantResults)
+                // to handle the case where the user grants the permission. See the documentation
+                // for ActivityCompat#requestPermissions for more details.
+                return null;
+            }
+            Location l = locationManager.getLastKnownLocation(provider);
+            if (l == null) {
+                continue;
+            }
+            if (bestLocation == null || l.getAccuracy() < bestLocation.getAccuracy()) {
+                // Found best last known location: %s", l);
+                bestLocation = l;
+            }
+        }
+        return bestLocation;
     }
 
     public void speak(final String text){ // make text 'final'
@@ -400,57 +502,6 @@ public class VoiceService extends Service implements RecognitionListener, Locati
             camera = null;
         }
     }
-/////////////////////////////GPS////////////////////////////////////
-
-
-    @Override
-    public void onLocationChanged(Location loc) {
-        String longitude = "Longitude: " + loc.getLongitude();
-        Log.v(LOG_TAG, longitude);
-        String latitude = "Latitude: " + loc.getLatitude();
-        Log.v(LOG_TAG, latitude);
-
-        /*------- To get city name from coordinates -------- */
-        String cityName = null;
-        Geocoder gcd = new Geocoder(getBaseContext(), Locale.getDefault());
-        List<Address> addresses;
-        try {
-            addresses = gcd.getFromLocation(loc.getLatitude(),
-                    loc.getLongitude(), 1);
-            if (addresses.size() > 0) {
-                System.out.println(addresses.get(0).getLocality());
-                cityName = addresses.get(0).getAddressLine(0);
-            }
-        }
-        catch (IOException e) {
-            e.printStackTrace();
-        }
-//        String s = longitude + "\n" + latitude + "\n\nМестоположение: "
-//                + cityName;
-
-        String s = "Местоположение: " + cityName;
-
-        send_answer(null,s);
-        Log.v(LOG_TAG, s);
-    }
-
-    @Override
-    public void onStatusChanged(String provider, int status, Bundle extras) {
-
-    }
-
-    @Override
-    public void onProviderEnabled(String provider) {
-
-    }
-
-    @Override
-    public void onProviderDisabled(String provider) {
-
-    }
-
-//\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\
-
 }
 
 

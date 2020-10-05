@@ -1,15 +1,19 @@
 package com.shureck.assistentv2;
 
 import androidx.appcompat.app.AppCompatActivity;
+import androidx.core.app.ActivityCompat;
+import androidx.core.content.ContextCompat;
 import androidx.localbroadcastmanager.content.LocalBroadcastManager;
 import androidx.recyclerview.widget.RecyclerView;
 
+import android.Manifest;
 import android.app.AlertDialog;
 import android.app.PendingIntent;
 import android.content.BroadcastReceiver;
 import android.content.Context;
 import android.content.Intent;
 import android.content.IntentFilter;
+import android.content.pm.PackageManager;
 import android.media.AudioManager;
 import android.nfc.NdefMessage;
 import android.nfc.NdefRecord;
@@ -49,6 +53,7 @@ public class MainActivity extends AppCompatActivity {
     public List<RowType> phones = new ArrayList<>();
     public Gson gson = new Gson();
     public Date currentDate;
+    private static final int PERMISSION_SEND_SMS = 123;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -61,6 +66,8 @@ public class MainActivity extends AppCompatActivity {
         msButton.setOnClickListener(addMessage);
 
         currentDate = new Date();
+
+        requestSmsPermission();
 
         startService(new Intent(MainActivity.this, VoiceService.class));
         //setVolumeControlStream(AudioManager.STREAM_MUSIC);
@@ -188,5 +195,17 @@ public class MainActivity extends AppCompatActivity {
                 "2) Где я? - определит местоположение", timeText, R.drawable.micro_sh, true));
         ad_answer = new DataAdapter(MainActivity.this, phones);
         recyclerView.setAdapter(ad_answer);
+    }
+
+    private void requestSmsPermission() {
+
+        // check permission is given
+        if (ContextCompat.checkSelfPermission(MainActivity.this, Manifest.permission.READ_CONTACTS) != PackageManager.PERMISSION_GRANTED) {
+            // request permission (see result in onRequestPermissionsResult() method)
+            ActivityCompat.requestPermissions(MainActivity.this,
+                    new String[]{Manifest.permission.SEND_SMS},
+                    PERMISSION_SEND_SMS);
+        } else {
+        }
     }
 }

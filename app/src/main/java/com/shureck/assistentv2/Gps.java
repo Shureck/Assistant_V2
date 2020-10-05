@@ -16,6 +16,8 @@ import android.location.LocationListener;
 import android.location.LocationManager;
 import android.os.AsyncTask;
 import android.os.Bundle;
+import android.os.Handler;
+import android.speech.tts.TextToSpeech;
 import android.util.Log;
 import android.view.View;
 import android.widget.Button;
@@ -41,6 +43,7 @@ import com.google.android.gms.maps.model.LatLng;
 import com.google.android.gms.maps.model.MarkerOptions;
 import com.google.android.gms.maps.model.Polyline;
 import com.google.android.gms.maps.model.PolylineOptions;
+import com.google.android.gms.tasks.OnSuccessListener;
 
 import org.json.JSONObject;
 
@@ -53,6 +56,7 @@ import java.net.URL;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
+import java.util.Locale;
 
 public class Gps extends AppCompatActivity
         implements GoogleMap.OnMyLocationButtonClickListener,
@@ -64,21 +68,76 @@ public class Gps extends AppCompatActivity
     private Polyline mPolyline;
     ArrayList<LatLng> mMarkerPoints;
 
-    private GoogleMap mMap;
+    private static GoogleMap mMap;
     public TextView textView, textView2, textView3;
     public EditText editText;
     public Button find_bt;
     public Sensor acc, mag;
     private SensorManager sensorManager;
     public static final int REQUEST_ID_ACCESS_COURSE_FINE_LOCATION = 100;
+    private Handler mHandler = new Handler();
 
     public float[] gravityData = new float[3];
     public float[] geomagneticData = new float[3];
-    public double rotationInDegrees;
+    public static double rotationInDegrees;
     public boolean hasGravityData, hasGeomagneticData;
     public static Geocoder geocoder;
     public LocationManager locationManager;
     public LocationListener locationListener;
+    private static LatLng finalCords = null;
+    private TextToSpeech tts;
+
+    public static Location moment_loc;
+    Context mContext;
+    public Polyline polyline;
+
+    public static class MyAsyncTask extends AsyncTask<String, String, String> {
+        @Override
+        protected String doInBackground(String... parameter) {
+            Address add_my = null;
+            int min = Integer.MAX_VALUE, ind = 0;
+            ArrayList<Address> address = new ArrayList<>();
+            ArrayList<LatLng> cords = new ArrayList<>();
+            CoordinateConversion coordinateConversion = new CoordinateConversion();
+            for (int j = 0; j < 10; j++) {
+                double[] cord = coordinateConversion.latLon2UTM_angle(moment_loc.getLatitude(), moment_loc.getLongitude(), rotationInDegrees, j * 10);
+                cords.add(new LatLng(cord[0], cord[1]));
+                try {
+                    address.add(geocoder.getFromLocation(cord[0], cord[1], 1).get(0));
+                } catch (IOException e) {
+                    e.printStackTrace();
+                }
+            }
+            if (address != null) {
+                for (int i = 1; i < address.size(); i++) {
+                    int sum = 0;
+                        for (int j = 0; j < cords.size(); j++) {
+                            sum += calcDist(address.get(i).getLatitude(), address.get(i).getLongitude(), cords.get(j).latitude, cords.get(j).longitude)[0];
+                        }
+                        if (sum < min) {
+                            min = sum;
+                            ind = i;
+                        }
+                        System.out.println("^^^^^^^^^^^^^ " + address.get(i));
+                }
+                finalCords = new LatLng(address.get(ind).getLatitude(), address.get(ind).getLongitude());
+                onDrawMarker();
+            } else {
+                System.out.println("SORRY");
+            }
+            return address.get(ind).getAddressLine(0);
+        }
+
+        @Override
+        protected void onProgressUpdate(String... progress) {
+        }
+
+        @Override
+        protected void onPostExecute(String s) {
+            super.onPostExecute(s);
+            onDrawMarker();
+        }
+    }
 
     @Override
     protected void onCreate(@Nullable Bundle savedInstanceState) {
@@ -127,8 +186,8 @@ public class Gps extends AppCompatActivity
                         float orientationMatrix[] = new float[3];
                         SensorManager.getOrientation(rotationMatrix, orientationMatrix);
                         float rotationInRadians = orientationMatrix[0];
-                        rotationInDegrees = ((Math.toDegrees(rotationInRadians)+360)%360);
-                        textView.setText(String.format("%.2f", rotationInDegrees)+" deg");
+                        rotationInDegrees = ((Math.toDegrees(rotationInRadians) + 360) % 360);
+                        textView.setText(String.format("%.2f", rotationInDegrees) + " deg");
                         //System.out.println("&&&&&&&&&&&&&&&&&&&& " + rotationInDegrees);
                         // do something with the rotation in degrees
                     }
@@ -142,6 +201,22 @@ public class Gps extends AppCompatActivity
             }
         };
 
+        tts = new TextToSpeech(this, new TextToSpeech.OnInitListener() {
+            @Override public void onInit(int initStatus) {
+                if (initStatus == TextToSpeech.SUCCESS) {
+                    if (tts.isLanguageAvailable(new Locale(Locale.getDefault().getLanguage()))
+                            == TextToSpeech.LANG_AVAILABLE) {
+                        tts.setLanguage(new Locale(Locale.getDefault().getLanguage()));
+                    } else {
+                        tts.setLanguage(Locale.US);
+                    }
+                    tts.setPitch(1.3f);
+                    tts.setSpeechRate(1.3f);
+                } else if (initStatus == TextToSpeech.ERROR) {
+                }
+            }
+        });
+
         sensorManager.registerListener(listener, acc, Sensor.TYPE_ACCELEROMETER);
         sensorManager.registerListener(listener, mag, Sensor.TYPE_MAGNETIC_FIELD);
 
@@ -149,14 +224,22 @@ public class Gps extends AppCompatActivity
             @Override
             public void onClick(View v) {
                 String s = editText.getText().toString();
-                try {
-                    List<Address> address = geocoder.getFromLocationName(s, 3);
-                    mMap.addMarker(new MarkerOptions().position(new LatLng(address.get(0).getLatitude(), address.get(0).getLongitude())).title("Res"));
-                    LatLng latLng = new LatLng(address.get(0).getLatitude(), address.get(0).getLongitude());
-                    CameraUpdate cameraUpdate = CameraUpdateFactory.newLatLngZoom(latLng, 14);
-                    mMap.animateCamera(cameraUpdate);
-                } catch (IOException e) {
-                    e.printStackTrace();
+                if(!s.equals("")) {
+                    try {
+                        List<Address> address = geocoder.getFromLocationName(s, 3);
+                        mMap.addMarker(new MarkerOptions().position(new LatLng(address.get(0).getLatitude(), address.get(0).getLongitude())).title("Res"));
+                        LatLng latLng = new LatLng(address.get(0).getLatitude(), address.get(0).getLongitude());
+                        CameraUpdate cameraUpdate = CameraUpdateFactory.newLatLngZoom(latLng, 14);
+                        mMap.animateCamera(cameraUpdate);
+                    } catch (IOException e) {
+                        e.printStackTrace();
+                    }
+                }
+                else{
+                    Gps.MyAsyncTask myAsyncTask = new Gps.MyAsyncTask();
+                    String str = myAsyncTask.doInBackground("1");
+                    myAsyncTask.onPostExecute("1");
+                    //tts.speak(str, TextToSpeech.QUEUE_ADD, null);
                 }
 
 
@@ -164,6 +247,12 @@ public class Gps extends AppCompatActivity
         });
 
         mMarkerPoints = new ArrayList<>();
+    }
+
+    public static void onDrawMarker() {
+        if (finalCords != null) {
+            mMap.addMarker(new MarkerOptions().position(finalCords).title("test"));
+        }
     }
 
     @Override
@@ -174,10 +263,10 @@ public class Gps extends AppCompatActivity
         // TODO: Before enabling the My Location layer, you must request
         // location permission from the user. This sample does not include
         // a request for location permission.
-        if (ContextCompat.checkSelfPermission( this,  Manifest.permission.ACCESS_FINE_LOCATION)
-                == PackageManager.PERMISSION_GRANTED)  {
+        if (ContextCompat.checkSelfPermission(this, Manifest.permission.ACCESS_FINE_LOCATION)
+                == PackageManager.PERMISSION_GRANTED) {
             mMap.setMyLocationEnabled(true);
-        }  else {
+        } else {
             System.out.println("!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!");
         }
         mMap.setOnMyLocationButtonClickListener(this);
@@ -187,7 +276,7 @@ public class Gps extends AppCompatActivity
             @Override
             public void onMapClick(LatLng point) {
                 // Already two locations
-                if(mMarkerPoints.size()>1){
+                if (mMarkerPoints.size() > 1) {
                     mMarkerPoints.clear();
                     mMap.clear();
                 }
@@ -205,9 +294,9 @@ public class Gps extends AppCompatActivity
                  * For the start location, the color of marker is GREEN and
                  * for the end location, the color of marker is RED.
                  */
-                if(mMarkerPoints.size()==1){
+                if (mMarkerPoints.size() == 1) {
                     options.icon(BitmapDescriptorFactory.defaultMarker(BitmapDescriptorFactory.HUE_GREEN));
-                }else if(mMarkerPoints.size()==2){
+                } else if (mMarkerPoints.size() == 2) {
                     options.icon(BitmapDescriptorFactory.defaultMarker(BitmapDescriptorFactory.HUE_RED));
                 }
 
@@ -215,7 +304,7 @@ public class Gps extends AppCompatActivity
                 //mMap.addMarker(options);
 
                 // Checks, whether start and end locations are captured
-                if(mMarkerPoints.size() >= 2){
+                if (mMarkerPoints.size() >= 2) {
                     mOrigin = mMarkerPoints.get(0);
                     mDestination = mMarkerPoints.get(1);
                     drawRoute();
@@ -223,7 +312,17 @@ public class Gps extends AppCompatActivity
 
             }
         });
-        get_location();
+
+        Location location = getLastKnownLocation();
+        if (location != null) {
+            LatLng latLng = new LatLng(location.getLatitude(), location.getLongitude());
+            CameraUpdate cameraUpdate = CameraUpdateFactory.newLatLngZoom(latLng, 16);
+            mMap.animateCamera(cameraUpdate);
+            moment_loc = location;
+        }
+        locationManager.requestLocationUpdates(LocationManager.GPS_PROVIDER, 0,0, locationListener);
+        mHandler.removeCallbacks(timeUpdaterRunnable);
+        mHandler.postDelayed(timeUpdaterRunnable, 100);
     }
 
     @Override
@@ -238,7 +337,7 @@ public class Gps extends AppCompatActivity
     public void onMyLocationClick(@NonNull Location location) {
         try {
             //System.out.println("$$$$$$$$$$$$$$$$$$$$$$$$ "+geocoder.getFromLocationName("premise",1,mMap.getMyLocation().getLatitude(),mMap.getMyLocation().getLongitude(),mMap.getMyLocation().getLatitude(),mMap.getMyLocation().getLongitude()));
-            System.out.println("$$$$$$$$$$$$$$$$$$$$$$$$ "+location);
+            System.out.println("$$$$$$$$$$$$$$$$$$$$$$$$ " + location);
 
             //mMap.addMarker(new MarkerOptions().position(new LatLng(location.getLatitude()-0.005, location.getLongitude()-0.005)).title("test"));
             //mMap.addMarker(new MarkerOptions().position(new LatLng(location.getLatitude()+0.0005f, location.getLongitude()+0.0005f)).title("test"));
@@ -248,19 +347,18 @@ public class Gps extends AppCompatActivity
 
             //mMap.addMarker(new MarkerOptions().position(new LatLng(t_1, t_2)).title("test"));
 
-            List<Address> address = geocoder.getFromLocation(t_1,t_2,5);
-            System.out.println("$$$$$$$$$$$$$$$$$$$$$$$$ "+ address);
+            List<Address> address = geocoder.getFromLocation(t_1, t_2, 5);
+            System.out.println("$$$$$$$$$$$$$$$$$$$$$$$$ " + address);
 
             double[] res = get_home(address, location.getLatitude(), location.getLongitude(), rotationInDegrees);
             //double res[] = calcDist(location.getLatitude(), location.getLongitude(), address.getLatitude(), address.getLongitude());
 
             //Toast.makeText(this, address.getAddressLine(0) + "\n"+ res[0] + "m\n" + res[1] + "deg\n", Toast.LENGTH_LONG).show();
 
-            if((int)res[2] == -1){
+            if ((int) res[2] == -1) {
                 Toast.makeText(this, "Can't find home", Toast.LENGTH_LONG).show();
                 //mMap.clear();
-            }
-            else {
+            } else {
                 Toast.makeText(this, "Successfully", Toast.LENGTH_LONG).show();
                 //textView2.setText("Current location:\n" + location.getLatitude() + " " + location.getLongitude());
                 //textView3.setText(address.get((int) res[2]).getAddressLine(0) + "\n\n" + res[0] + " m\n" + res[1] + " deg\n");
@@ -271,6 +369,34 @@ public class Gps extends AppCompatActivity
         } catch (IOException e) {
             e.printStackTrace();
         }
+    }
+
+
+    private Location getLastKnownLocation() {
+        locationManager = (LocationManager) getApplicationContext().getSystemService(LOCATION_SERVICE);
+        List<String> providers = locationManager.getProviders(true);
+        Location bestLocation = null;
+        for (String provider : providers) {
+            if (ActivityCompat.checkSelfPermission(this, Manifest.permission.ACCESS_FINE_LOCATION) != PackageManager.PERMISSION_GRANTED && ActivityCompat.checkSelfPermission(this, Manifest.permission.ACCESS_COARSE_LOCATION) != PackageManager.PERMISSION_GRANTED) {
+                // TODO: Consider calling
+                //    ActivityCompat#requestPermissions
+                // here to request the missing permissions, and then overriding
+                //   public void onRequestPermissionsResult(int requestCode, String[] permissions,
+                //                                          int[] grantResults)
+                // to handle the case where the user grants the permission. See the documentation
+                // for ActivityCompat#requestPermissions for more details.
+                return null;
+            }
+            Location l = locationManager.getLastKnownLocation(provider);
+            if (l == null) {
+                continue;
+            }
+            if (bestLocation == null || l.getAccuracy() < bestLocation.getAccuracy()) {
+                // Found best last known location: %s", l);
+                bestLocation = l;
+            }
+        }
+        return bestLocation;
     }
 
     @Override
@@ -311,12 +437,13 @@ public class Gps extends AppCompatActivity
         locationManager.requestSingleUpdate(LocationManager.GPS_PROVIDER, locationListener, null);
     }
 
-    LocationListener ll = new LocationListener() {
+    final LocationListener ll = new LocationListener() {
         @Override
         public void onLocationChanged(Location location) {
             LatLng latLng = new LatLng(location.getLatitude(), location.getLongitude());
-            CameraUpdate cameraUpdate = CameraUpdateFactory.newLatLngZoom(latLng, 14);
+            CameraUpdate cameraUpdate = CameraUpdateFactory.newLatLng(latLng);
             mMap.animateCamera(cameraUpdate);
+            moment_loc = location;
         }
 
         @Override
@@ -495,7 +622,31 @@ public class Gps extends AppCompatActivity
         }
     }
 
-    public double[] calcDist(double llat1, double llong1, double llat2, double llong2){
+    private Runnable timeUpdaterRunnable = new Runnable() {
+        public void run() {
+            if (moment_loc != null) {
+                fromKekwToPog(moment_loc.getLatitude(), moment_loc.getLongitude());
+            }
+            mHandler.postDelayed(this, 500);
+        }
+    };
+
+    public double[] fromKekwToPog(double dLat, double dLon){
+        CoordinateConversion coordinateConversion = new CoordinateConversion();
+        //System.out.println("************************* "+coordinateConversion.latLon2UTM_angle(dLat, dLon,rotationInDegrees,500)[0]+" "+coordinateConversion.latLon2UTM_angle(dLat, dLon,rotationInDegrees,500)[1]);
+        double[] cords = coordinateConversion.latLon2UTM_angle(moment_loc.getLatitude(), moment_loc.getLongitude(), rotationInDegrees, 500);
+        if(polyline != null){
+            polyline.remove();
+        }
+        //mMap.addMarker(new MarkerOptions().position(new LatLng(coordinateConversion.latLon2UTM_angle(dLat, dLon,rotationInDegrees,500)[0], coordinateConversion.latLon2UTM_angle(dLat, dLon,rotationInDegrees,500)[1])).title("test"));
+        polyline = this.mMap.addPolyline(new PolylineOptions() .add(new LatLng(dLat, dLon))
+                .add(new LatLng(cords[0],cords[1]))
+                .add(new LatLng(dLat, dLon)).color(Color.GREEN));
+        double mass[] = {};
+        return mass;
+    }
+
+    public static double[] calcDist(double llat1, double llong1, double llat2, double llong2){
         //Math.PI;
         int rad = 6372795;
         double lat1 = llat1*Math.PI/180;
