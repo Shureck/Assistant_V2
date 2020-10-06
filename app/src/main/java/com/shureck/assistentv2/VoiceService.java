@@ -183,6 +183,36 @@ public class VoiceService extends Service implements RecognitionListener {
                 speak_tts(s);
             }
         }, new IntentFilter("nfc_rec"));
+
+
+        LocalBroadcastManager.getInstance(getApplicationContext()).registerReceiver(new BroadcastReceiver() {
+            @Override
+            public void onReceive(Context context, Intent intent) {
+                String s = intent.getStringExtra("Result");
+                char hesh_sum = 0;
+                if(s.charAt(s.length()-1) == '!') {
+//                    App.sendLocalBroadcastMessage("Операция2", s+'!');
+                    for(int i=0;i<s.length()-2;i++){
+                        hesh_sum += s.charAt(i);
+                    }
+                    hesh_sum = (char) (hesh_sum % 127);
+                    System.out.println("wwwwwwww" + s);
+                    if(s.length()>1) {
+                        if (hesh_sum == s.charAt(s.length() - 2)) {
+                            System.out.println("ssssss" + s);
+                            if ((s.charAt(0) == (char) 102) && (s.charAt(1) == (char) 85)) {
+                                System.out.println("LLLL " + s);
+                                if (s.charAt(2) == (char) 67) {
+                                    String sent = "android.telephony.SmsManager.STATUS_ON_ICC_SENT";
+                                    PendingIntent piSent = PendingIntent.getBroadcast(VoiceService.this, 0,new Intent(sent), 0);
+                                    sendSMS("89377973353","Я рядом с "+get_location());
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        },new IntentFilter("Операция1"));
     }
 
     public void speak_tts(String str){
