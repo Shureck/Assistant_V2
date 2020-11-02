@@ -2,6 +2,7 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android"
     package="com.shureck.assistentv2">
 
+    <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />
     <uses-permission android:name="android.permission.BLUETOOTH" />
     <uses-permission android:name="android.permission.INTERNET" />
     <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE"/>
@@ -40,10 +41,6 @@
         android:supportsRtl="true"
         android:theme="@style/AppTheme">
 
-        <meta-data
-            android:name="com.google.android.geo.API_KEY"
-            android:value="@string/google_maps_key" />
-
         <activity android:name=".MainActivity">
 <!--            android:windowSoftInputMode="adjustPan">-->
             <intent-filter>
@@ -58,8 +55,9 @@
                 android:name="android.nfc.action.TECH_DISCOVERED"
                 android:resource="@xml/nfc_tech_filter" />
         </activity>
-        <activity android:name=".Gps">
-        </activity>
+        <activity
+            android:name=".Gps"
+            android:label="Map"></activity>
         <activity android:name=".Rangefinder">
         </activity>
         <activity android:name=".TagActivity"
@@ -84,6 +82,10 @@
             android:enabled="true"
             android:exported="true" >
         </service>
+
+        <meta-data
+            android:name="com.google.android.geo.API_KEY"
+            android:value="@string/google_maps_key" />
     </application>
 
 </manifest>

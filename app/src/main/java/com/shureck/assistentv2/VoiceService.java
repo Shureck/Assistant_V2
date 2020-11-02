@@ -32,8 +32,10 @@ import android.nfc.Tag;
 import android.nfc.tech.NfcF;
 import android.os.Build;
 import android.os.Bundle;
+import android.os.Handler;
 import android.os.IBinder;
 import android.os.Looper;
+import android.os.Message;
 import android.os.Parcelable;
 import android.preference.PreferenceManager;
 import android.speech.RecognitionListener;
@@ -54,6 +56,7 @@ import androidx.annotation.RequiresApi;
 import androidx.core.app.ActivityCompat;
 import androidx.localbroadcastmanager.content.LocalBroadcastManager;
 
+import com.google.android.gms.maps.model.LatLng;
 import com.google.gson.Gson;
 import com.google.gson.reflect.TypeToken;
 
@@ -76,6 +79,10 @@ public class VoiceService extends Service implements RecognitionListener {
 
     NfcAdapter nfcAdapter;
     NfcVAdapter nfcVAdapter;
+
+    final String SAVED_TEXT = "saved_text";
+    final String SAVED_ADR = "saved_adr";
+
     final String LOG_TAG = "LOG_TAG";
     public SpeechRecognizer speech = null;
     public Intent recognizerIntent;
@@ -90,6 +97,12 @@ public class VoiceService extends Service implements RecognitionListener {
     private Camera camera;
     Camera.Parameters parameters;
     public boolean isSpeak_tts;
+    String telephonNum;
+    Geocoder geocoder;
+    LatLng address;
+    double radius = 500;
+    private Handler mHandler = new Handler();
+    public static Location moment_loc;
 
     public SharedPreferences appSharedPrefs;
     public SharedPreferences.Editor prefsEditor;
@@ -107,8 +120,13 @@ public class VoiceService extends Service implements RecognitionListener {
         isSpeak_tts = appSharedPrefs.getBoolean("isSpeak", false);
 
         currentDate = new Date();
-
         camera = Camera.open();
+
+        geocoder = new Geocoder(this);
+
+
+        //saveText(SAVED_ADR, "Люберцы, Юбилейная 24|500");
+        telephonNum = loadText(SAVED_TEXT);
 
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
             camManager = (CameraManager) getSystemService(Context.CAMERA_SERVICE);
@@ -136,6 +154,19 @@ public class VoiceService extends Service implements RecognitionListener {
             Toast.makeText(this, "Oops - Speech recognition not supported!", Toast.LENGTH_LONG).show();
         }
 
+        String ss = loadText(SAVED_ADR);
+        if(!ss.equals("") && ss != null){
+            try {
+                address = new LatLng(geocoder.getFromLocationName(ss.substring(0,ss.indexOf('|')),1).get(0).getLatitude(),geocoder.getFromLocationName(ss.substring(0,ss.indexOf('|')),1).get(0).getLongitude());
+                ss = ss.substring(ss.indexOf('|')+1,ss.length());
+                if(!ss.equals("") && ss != null) {
+                    radius = Double.parseDouble(ss.substring(ss.indexOf('|') + 1, ss.length()));
+                }
+            } catch (IOException e) {
+                e.printStackTrace();
+            }
+        }
+
         tts = new TextToSpeech(this, new TextToSpeech.OnInitListener() {
             @Override
             public void onInit(int status) {
@@ -153,6 +184,9 @@ public class VoiceService extends Service implements RecognitionListener {
                 }
             }
         });
+
+        mHandler.removeCallbacks(badTimeUpdater);
+        mHandler.postDelayed(badTimeUpdater, 100);
 
 
         LocalBroadcastManager.getInstance(getApplicationContext()).registerReceiver(new BroadcastReceiver() {
@@ -184,6 +218,29 @@ public class VoiceService extends Service implements RecognitionListener {
             }
         }, new IntentFilter("nfc_rec"));
 
+        LocalBroadcastManager.getInstance(getApplicationContext()).registerReceiver(new BroadcastReceiver() {
+            @Override
+            public void onReceive(Context context, Intent intent) {
+                String s = intent.getStringExtra("Result");
+                telephonNum = s;
+            }
+        }, new IntentFilter("Номер"));
+
+        LocalBroadcastManager.getInstance(getApplicationContext()).registerReceiver(new BroadcastReceiver() {
+            @Override
+            public void onReceive(Context context, Intent intent) {
+                String s = intent.getStringExtra("Result");
+                try {
+                    Address add = geocoder.getFromLocationName(s.substring(0,s.indexOf('|')),1).get(0);
+                    address = new LatLng(add.getLatitude(),add.getLongitude());
+                    radius = Double.parseDouble(s.substring(s.indexOf('|')+1,s.length()));
+                    App.sendLocalBroadcastMessage("Address_back",add.getAddressLine(0));
+                } catch (IOException e) {
+                    e.printStackTrace();
+                }
+            }
+        }, new IntentFilter("Address"));
+
 
         LocalBroadcastManager.getInstance(getApplicationContext()).registerReceiver(new BroadcastReceiver() {
             @Override
@@ -205,7 +262,9 @@ public class VoiceService extends Service implements RecognitionListener {
                                 if (s.charAt(2) == (char) 67) {
                                     String sent = "android.telephony.SmsManager.STATUS_ON_ICC_SENT";
                                     PendingIntent piSent = PendingIntent.getBroadcast(VoiceService.this, 0,new Intent(sent), 0);
-                                    sendSMS("89377973353","Я рядом с "+get_location());
+                                    if(telephonNum != "") {
+                                        sendSMS(telephonNum, "Я рядом с " + get_location());
+                                    }
                                 }
                             }
                         }
@@ -220,6 +279,17 @@ public class VoiceService extends Service implements RecognitionListener {
             tts.speak(str, TextToSpeech.QUEUE_FLUSH, null);
         }
     }
+
+    private Runnable badTimeUpdater = new Runnable() {
+        @Override
+        public void run() {
+            moment_loc = getLastKnownLocation();
+            if(calcDist(address.latitude,address.longitude,moment_loc.getLatitude(),moment_loc.getLongitude())[0] > radius){
+                Toast.makeText(VoiceService.this,"Вы покинули радиус!!!",Toast.LENGTH_LONG).show();
+            }
+            mHandler.postDelayed(this, 5*60*1000);
+        }
+    };
 
     private String robo_answer(String ask) {
         ask = ask.toLowerCase();
@@ -399,6 +469,17 @@ public class VoiceService extends Service implements RecognitionListener {
         return s;
     }
 
+    void saveText(String tag, String text) {
+        prefsEditor.putString(tag, text);
+        prefsEditor.commit();
+    }
+
+    String loadText(String tag) {
+        String savedText = appSharedPrefs.getString(tag, "");
+        return savedText;
+    }
+
+
     private Location getLastKnownLocation() {
         locationManager = (LocationManager) getApplicationContext().getSystemService(LOCATION_SERVICE);
         List<String> providers = locationManager.getProviders(true);
@@ -431,6 +512,44 @@ public class VoiceService extends Service implements RecognitionListener {
         // ... do not declare tts here
 
 
+    }
+
+    public static double[] calcDist(double llat1, double llong1, double llat2, double llong2){
+        //Math.PI;
+        int rad = 6372795;
+        double lat1 = llat1*Math.PI/180;
+        double lat2 = llat2*Math.PI/180;
+        double long1 = llong1*Math.PI/180;
+        double long2 = llong2*Math.PI/180;
+
+        double cl1 = Math.cos(lat1);
+        double cl2 = Math.cos(lat2);
+        double sl1 = Math.sin(lat1);
+        double sl2 = Math.sin(lat2);
+        double delta = long2 - long1;
+        double cdelta = Math.cos(delta);
+        double sdelta = Math.sin(delta);
+
+        double y = Math.sqrt(Math.pow(cl2*sdelta,2)+Math.pow(cl1*sl2-sl1*cl2*cdelta,2));
+        double x = sl1*sl2+cl1*cl2*cdelta;
+        double ad = Math.atan2(y,x);
+        double dist = ad*rad;
+
+        x = (cl1*sl2) - (sl1*cl2*cdelta);
+        y = sdelta*cl2;
+        double z = Math.toDegrees(Math.atan(-y/x));
+
+        if (x < 0){z = z+180;}
+
+        double z2 = (z+180.) % 360. - 180;
+        z2 -= Math.toRadians(z2);
+        double anglerad2 = z2 - ((2*Math.PI)*Math.floor((z2/(2*Math.PI))));
+        double angledeg = (anglerad2*180.)/Math.PI;
+
+        System.out.println("!!!!!!!!!!!!!!! "+ dist + " m " + angledeg + " dig");
+
+        double mass[] = {dist,angledeg,-1};
+        return mass;
     }
 
     public int onStartCommand(Intent intent, int flags, int startId) {
@@ -533,120 +652,3 @@ public class VoiceService extends Service implements RecognitionListener {
         }
     }
 }
-
-
-//public class VoiceRecognitionActivity extends Activity implements RecognitionListener {
-//    private TextView returnedText;
-//    private ToggleButton toggleButton;
-//    private ProgressBar progressBar;
-//    private SpeechRecognizer speech = null;
-//    private Intent recognizerIntent;
-//    private String LOG_TAG = "VoiceRecognitionActivity";
-//    @Override
-//    protected void onCreate(Bundle savedInstanceState) {
-//        super.onCreate(savedInstanceState);
-//        setContentView(R.layout.activity_voice_recognition);
-//        returnedText = (TextView) findViewById(R.id.textView1);
-//        progressBar = (ProgressBar) findViewById(R.id.progressBar1);
-//        toggleButton = (ToggleButton) findViewById(R.id.toggleButton1);
-//        progressBar.setVisibility(View.INVISIBLE);
-//
-//        toggleButton.setOnCheckedChangeListener(new OnCheckedChangeListener() {
-//            @Override
-//            public void onCheckedChanged(CompoundButton buttonView, boolean isChecked) {
-//                if (isChecked) {
-//                    progressBar.setVisibility(View.VISIBLE);
-//                    progressBar.setIndeterminate(true);
-//                    speech.startListening(recognizerIntent);
-//                } else {
-//                    progressBar.setIndeterminate(false);
-//                    progressBar.setVisibility(View.INVISIBLE);
-//                    speech.stopListening();
-//                }
-//            }
-//        });
-//    }
-//    @Override
-//    public void onResume() {
-//        super.onResume();
-//    }
-//    @Override
-//    protected void onPause() {
-//        super.onPause();
-//        if (speech != null) {
-//            speech.destroy();
-//            Log.i(LOG_TAG, "destroy");
-//        }
-//    }
-//    @Override
-//    public void onBeginningOfSpeech() {
-//        Log.i(LOG_TAG, "onBeginningOfSpeech");
-//        progressBar.setIndeterminate(false);
-//        progressBar.setMax(10);
-//    }
-//    @Override
-//    public void onBufferReceived(byte[] buffer) {
-//        Log.i(LOG_TAG, "onBufferReceived: " + buffer);
-//    }
-//    @Override
-//    public void onEndOfSpeech() {
-//        Log.i(LOG_TAG, "onEndOfSpeech");
-//        progressBar.setIndeterminate(true);
-//        toggleButton.setChecked(false);
-//    }
-//    @Override
-//    public void onError(int errorCode) {
-//        String errorMessage = getErrorText(errorCode);
-//        Log.d(LOG_TAG, "FAILED " + errorMessage);
-//        returnedText.setText(errorMessage);
-//        toggleButton.setChecked(false);
-//    }
-//    @Override
-//    public void onEvent(int arg0, Bundle arg1) {
-//        Log.i(LOG_TAG, "onEvent");
-//    }
-//    @Override
-//    public void onPartialResults(Bundle arg0) {
-//        Log.i(LOG_TAG, "onPartialResults");
-//    }
-//    @Override public void onReadyForSpeech(Bundle arg0) {
-//        Log.i(LOG_TAG, "onReadyForSpeech");
-//    }
-//    @Override public void onResults(Bundle results) {
-//        Log.i(LOG_TAG, "onResults");
-//        ArrayList<String> matches = results.getStringArrayList(SpeechRecognizer.RESULTS_RECOGNITION);
-//        String text = "";
-//        for (String result : matches) text += result + "\n";
-//        returnedText.setText(text);
-//    }
-//    @Override public void onRmsChanged(float rmsdB) {
-//        Log.i(LOG_TAG, "onRmsChanged: " + rmsdB);
-//        progressBar.setProgress((int) rmsdB);
-//    }
-//    public static String getErrorText(int errorCode) {
-//        String message;
-//        switch (errorCode) {
-//            case SpeechRecognizer.ERROR_AUDIO: message = "Audio recording error";
-//            break;
-//            case SpeechRecognizer.ERROR_CLIENT: message = "Client side error";
-//            break;
-//            case SpeechRecognizer.ERROR_INSUFFICIENT_PERMISSIONS: message = "Insufficient permissions";
-//            break;
-//            case SpeechRecognizer.ERROR_NETWORK: message = "Network error";
-//            break;
-//            case SpeechRecognizer.ERROR_NETWORK_TIMEOUT: message = "Network timeout";
-//            break;
-//            case SpeechRecognizer.ERROR_NO_MATCH: message = "No match";
-//            break;
-//            case SpeechRecognizer.ERROR_RECOGNIZER_BUSY: message = "RecognitionService busy";
-//            break;
-//            case SpeechRecognizer.ERROR_SERVER: message = "error from server";
-//            break;
-//            case SpeechRecognizer.ERROR_SPEECH_TIMEOUT: message = "No speech input";
-//            break;
-//            default: message = "Didn't understand, please try again.";
-//            break;
-//        }
-//        return message;
-//    }
-//}

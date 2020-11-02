@@ -3,6 +3,7 @@ package com.shureck.assistentv2;
 import android.Manifest;
 import android.content.Context;
 import android.content.Intent;
+import android.content.SharedPreferences;
 import android.content.pm.PackageManager;
 import android.graphics.Color;
 import android.hardware.Sensor;
@@ -17,6 +18,7 @@ import android.location.LocationManager;
 import android.os.AsyncTask;
 import android.os.Bundle;
 import android.os.Handler;
+import android.preference.PreferenceManager;
 import android.speech.tts.TextToSpeech;
 import android.util.Log;
 import android.view.View;
@@ -39,6 +41,7 @@ import com.google.android.gms.maps.GoogleMap;
 import com.google.android.gms.maps.OnMapReadyCallback;
 import com.google.android.gms.maps.SupportMapFragment;
 import com.google.android.gms.maps.model.BitmapDescriptorFactory;
+import com.google.android.gms.maps.model.CircleOptions;
 import com.google.android.gms.maps.model.LatLng;
 import com.google.android.gms.maps.model.MarkerOptions;
 import com.google.android.gms.maps.model.Polyline;
@@ -61,12 +64,18 @@ import java.util.Locale;
 public class Gps extends AppCompatActivity
         implements GoogleMap.OnMyLocationButtonClickListener,
         GoogleMap.OnMyLocationClickListener,
-        OnMapReadyCallback {
+        OnMapReadyCallback, DrawRoutte.onDrawRoutte{
 
     private LatLng mOrigin;
     private LatLng mDestination;
     private Polyline mPolyline;
     ArrayList<LatLng> mMarkerPoints;
+
+    SharedPreferences sPref;
+    final String SAVED_TEXT = "saved_text";
+    final String SAVED_ADR = "saved_adr";
+    LatLng address;
+    double radius;
 
     private static GoogleMap mMap;
     public TextView textView, textView2, textView3;
@@ -86,10 +95,20 @@ public class Gps extends AppCompatActivity
     public LocationListener locationListener;
     private static LatLng finalCords = null;
     private TextToSpeech tts;
+    public SharedPreferences appSharedPrefs;
+    public SharedPreferences.Editor prefsEditor;
+    LatLng latLng;
+    int flag = 0;
 
     public static Location moment_loc;
     Context mContext;
     public Polyline polyline;
+
+    @Override
+    public void afterDraw(String result) {
+
+    }
+
 
     public static class MyAsyncTask extends AsyncTask<String, String, String> {
         @Override
@@ -111,14 +130,14 @@ public class Gps extends AppCompatActivity
             if (address != null) {
                 for (int i = 1; i < address.size(); i++) {
                     int sum = 0;
-                        for (int j = 0; j < cords.size(); j++) {
-                            sum += calcDist(address.get(i).getLatitude(), address.get(i).getLongitude(), cords.get(j).latitude, cords.get(j).longitude)[0];
-                        }
-                        if (sum < min) {
-                            min = sum;
-                            ind = i;
-                        }
-                        System.out.println("^^^^^^^^^^^^^ " + address.get(i));
+                    for (int j = 0; j < cords.size(); j++) {
+                        sum += calcDist(address.get(i).getLatitude(), address.get(i).getLongitude(), cords.get(j).latitude, cords.get(j).longitude)[0];
+                    }
+                    if (sum < min) {
+                        min = sum;
+                        ind = i;
+                    }
+                    System.out.println("^^^^^^^^^^^^^ " + address.get(i));
                 }
                 finalCords = new LatLng(address.get(ind).getLatitude(), address.get(ind).getLongitude());
                 onDrawMarker();
@@ -155,6 +174,9 @@ public class Gps extends AppCompatActivity
         textView3 = findViewById(R.id.textView3);
         editText = findViewById(R.id.editText2);
         find_bt = findViewById(R.id.button4);
+
+        appSharedPrefs = PreferenceManager.getDefaultSharedPreferences(getApplicationContext());
+        prefsEditor = appSharedPrefs.edit();
 
         locationManager = (LocationManager) getSystemService(Context.LOCATION_SERVICE);
         locationListener = ll;
@@ -202,7 +224,8 @@ public class Gps extends AppCompatActivity
         };
 
         tts = new TextToSpeech(this, new TextToSpeech.OnInitListener() {
-            @Override public void onInit(int initStatus) {
+            @Override
+            public void onInit(int initStatus) {
                 if (initStatus == TextToSpeech.SUCCESS) {
                     if (tts.isLanguageAvailable(new Locale(Locale.getDefault().getLanguage()))
                             == TextToSpeech.LANG_AVAILABLE) {
@@ -220,22 +243,24 @@ public class Gps extends AppCompatActivity
         sensorManager.registerListener(listener, acc, Sensor.TYPE_ACCELEROMETER);
         sensorManager.registerListener(listener, mag, Sensor.TYPE_MAGNETIC_FIELD);
 
+
         find_bt.setOnClickListener(new View.OnClickListener() {
             @Override
             public void onClick(View v) {
                 String s = editText.getText().toString();
-                if(!s.equals("")) {
+                if (!s.equals("")) {
                     try {
                         List<Address> address = geocoder.getFromLocationName(s, 3);
                         mMap.addMarker(new MarkerOptions().position(new LatLng(address.get(0).getLatitude(), address.get(0).getLongitude())).title("Res"));
-                        LatLng latLng = new LatLng(address.get(0).getLatitude(), address.get(0).getLongitude());
+                        latLng = new LatLng(address.get(0).getLatitude(), address.get(0).getLongitude());
                         CameraUpdate cameraUpdate = CameraUpdateFactory.newLatLngZoom(latLng, 14);
                         mMap.animateCamera(cameraUpdate);
+                        flag = 1;
+                        onMapReady(mMap);
                     } catch (IOException e) {
                         e.printStackTrace();
                     }
-                }
-                else{
+                } else {
                     Gps.MyAsyncTask myAsyncTask = new Gps.MyAsyncTask();
                     String str = myAsyncTask.doInBackground("1");
                     myAsyncTask.onPostExecute("1");
@@ -257,72 +282,93 @@ public class Gps extends AppCompatActivity
 
     @Override
     public void onMapReady(GoogleMap map) {
-        mMap = map;
-        geocoder = new Geocoder(this);
-        mMap.setMapType(GoogleMap.MAP_TYPE_HYBRID);
-        // TODO: Before enabling the My Location layer, you must request
-        // location permission from the user. This sample does not include
-        // a request for location permission.
-        if (ContextCompat.checkSelfPermission(this, Manifest.permission.ACCESS_FINE_LOCATION)
-                == PackageManager.PERMISSION_GRANTED) {
-            mMap.setMyLocationEnabled(true);
-        } else {
-            System.out.println("!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!");
-        }
-        mMap.setOnMyLocationButtonClickListener(this);
-        mMap.setOnMyLocationClickListener(this);
+        if(flag == 0) {
+            mMap = map;
+            mMap.setMapType(GoogleMap.MAP_TYPE_HYBRID);
+            geocoder = new Geocoder(this);
 
-        mMap.setOnMapClickListener(new GoogleMap.OnMapClickListener() {
-            @Override
-            public void onMapClick(LatLng point) {
-                // Already two locations
-                if (mMarkerPoints.size() > 1) {
-                    mMarkerPoints.clear();
-                    mMap.clear();
-                }
-
-                // Adding new item to the ArrayList
-                mMarkerPoints.add(point);
-
-                // Creating MarkerOptions
-                MarkerOptions options = new MarkerOptions();
-
-                // Setting the position of the marker
-                options.position(point);
-
-                /**
-                 * For the start location, the color of marker is GREEN and
-                 * for the end location, the color of marker is RED.
-                 */
-                if (mMarkerPoints.size() == 1) {
-                    options.icon(BitmapDescriptorFactory.defaultMarker(BitmapDescriptorFactory.HUE_GREEN));
-                } else if (mMarkerPoints.size() == 2) {
-                    options.icon(BitmapDescriptorFactory.defaultMarker(BitmapDescriptorFactory.HUE_RED));
-                }
-
-                // Add new marker to the Google Map Android API V2
-                //mMap.addMarker(options);
-
-                // Checks, whether start and end locations are captured
-                if (mMarkerPoints.size() >= 2) {
-                    mOrigin = mMarkerPoints.get(0);
-                    mDestination = mMarkerPoints.get(1);
-                    drawRoute();
-                }
-
+            // TODO: Before enabling the My Location layer, you must request
+            // location permission from the user. This sample does not include
+            // a request for location permission.
+            if (ContextCompat.checkSelfPermission(this, Manifest.permission.ACCESS_FINE_LOCATION)
+                    == PackageManager.PERMISSION_GRANTED) {
+                mMap.setMyLocationEnabled(true);
+            } else {
+                System.out.println("!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!");
             }
-        });
+            mMap.setOnMyLocationButtonClickListener(this);
+            mMap.setOnMyLocationClickListener(this);
 
-        Location location = getLastKnownLocation();
-        if (location != null) {
-            LatLng latLng = new LatLng(location.getLatitude(), location.getLongitude());
-            CameraUpdate cameraUpdate = CameraUpdateFactory.newLatLngZoom(latLng, 16);
-            mMap.animateCamera(cameraUpdate);
-            moment_loc = location;
+            mMap.setOnMapClickListener(new GoogleMap.OnMapClickListener() {
+                @Override
+                public void onMapClick(LatLng point) {
+                    // Already two locations
+                    if (mMarkerPoints.size() > 1) {
+                        mMarkerPoints.clear();
+                        mMap.clear();
+                    }
+
+                    // Adding new item to the ArrayList
+                    mMarkerPoints.add(point);
+
+                    // Creating MarkerOptions
+                    MarkerOptions options = new MarkerOptions();
+
+                    // Setting the position of the marker
+                    options.position(point);
+
+                    /**
+                     * For the start location, the color of marker is GREEN and
+                     * for the end location, the color of marker is RED.
+                     */
+                    if (mMarkerPoints.size() == 1) {
+                        options.icon(BitmapDescriptorFactory.defaultMarker(BitmapDescriptorFactory.HUE_GREEN));
+                    } else if (mMarkerPoints.size() == 2) {
+                        options.icon(BitmapDescriptorFactory.defaultMarker(BitmapDescriptorFactory.HUE_RED));
+                    }
+
+                    // Add new marker to the Google Map Android API V2
+                    //mMap.addMarker(options);
+
+                    // Checks, whether start and end locations are captured
+                    if (mMarkerPoints.size() >= 2) {
+                        mOrigin = mMarkerPoints.get(0);
+                        mDestination = mMarkerPoints.get(1);
+                        drawRoute();
+                    }
+
+                }
+            });
+
+            String ss = loadText(SAVED_ADR);
+            if (ss != "") {
+                try {
+                    address = new LatLng(geocoder.getFromLocationName(ss.substring(0, ss.indexOf('|')), 1).get(0).getLatitude(), geocoder.getFromLocationName(ss.substring(0, ss.indexOf('|')), 1).get(0).getLongitude());
+                    radius = Double.parseDouble(ss.substring(ss.indexOf('|') + 1, ss.length()));
+                    drawCircle(address, radius);
+                } catch (IOException e) {
+                    e.printStackTrace();
+                }
+            }
+
+            Location location = getLastKnownLocation();
+            if (location != null) {
+                LatLng latLng = new LatLng(location.getLatitude(), location.getLongitude());
+                CameraUpdate cameraUpdate = CameraUpdateFactory.newLatLngZoom(latLng, 16);
+                mMap.animateCamera(cameraUpdate);
+                moment_loc = location;
+            }
+            locationManager.requestLocationUpdates(LocationManager.GPS_PROVIDER, 0, 0, locationListener);
+//            mHandler.removeCallbacks(timeUpdaterRunnable);
+//            mHandler.postDelayed(timeUpdaterRunnable, 100);
         }
-        locationManager.requestLocationUpdates(LocationManager.GPS_PROVIDER, 0,0, locationListener);
-        mHandler.removeCallbacks(timeUpdaterRunnable);
-        mHandler.postDelayed(timeUpdaterRunnable, 100);
+        else {
+            if (latLng != null) {
+                DrawRoutte.getInstance(Gps.this, Gps.this).setFromLatLong(moment_loc.getLatitude(), moment_loc.getLongitude())
+                        .setToLatLong(latLng.latitude, latLng.longitude).setGmapAndKey("AIzaSyBNOXMPxiG3P8T_3K-jswK7MZ-7C_J86-U", mMap).run();
+            }
+            flag = 0;
+        }
     }
 
     @Override
@@ -405,6 +451,16 @@ public class Gps extends AppCompatActivity
             if (permissions.length == 1 &&
                     permissions[0] == Manifest.permission.ACCESS_FINE_LOCATION &&
                     grantResults[0] == PackageManager.PERMISSION_GRANTED) {
+                if (ActivityCompat.checkSelfPermission(this, Manifest.permission.ACCESS_FINE_LOCATION) != PackageManager.PERMISSION_GRANTED && ActivityCompat.checkSelfPermission(this, Manifest.permission.ACCESS_COARSE_LOCATION) != PackageManager.PERMISSION_GRANTED) {
+                    // TODO: Consider calling
+                    //    ActivityCompat#requestPermissions
+                    // here to request the missing permissions, and then overriding
+                    //   public void onRequestPermissionsResult(int requestCode, String[] permissions,
+                    //                                          int[] grantResults)
+                    // to handle the case where the user grants the permission. See the documentation
+                    // for ActivityCompat#requestPermissions for more details.
+                    return;
+                }
                 mMap.setMyLocationEnabled(true);
             } else {
                 // Permission was denied. Display an error message.
@@ -441,8 +497,6 @@ public class Gps extends AppCompatActivity
         @Override
         public void onLocationChanged(Location location) {
             LatLng latLng = new LatLng(location.getLatitude(), location.getLongitude());
-            CameraUpdate cameraUpdate = CameraUpdateFactory.newLatLng(latLng);
-            mMap.animateCamera(cameraUpdate);
             moment_loc = location;
         }
 
@@ -625,13 +679,13 @@ public class Gps extends AppCompatActivity
     private Runnable timeUpdaterRunnable = new Runnable() {
         public void run() {
             if (moment_loc != null) {
-                fromKekwToPog(moment_loc.getLatitude(), moment_loc.getLongitude());
+                drawLine(moment_loc.getLatitude(), moment_loc.getLongitude());
             }
             mHandler.postDelayed(this, 500);
         }
     };
 
-    public double[] fromKekwToPog(double dLat, double dLon){
+    public double[] drawLine(double dLat, double dLon){
         CoordinateConversion coordinateConversion = new CoordinateConversion();
         //System.out.println("************************* "+coordinateConversion.latLon2UTM_angle(dLat, dLon,rotationInDegrees,500)[0]+" "+coordinateConversion.latLon2UTM_angle(dLat, dLon,rotationInDegrees,500)[1]);
         double[] cords = coordinateConversion.latLon2UTM_angle(moment_loc.getLatitude(), moment_loc.getLongitude(), rotationInDegrees, 500);
@@ -736,6 +790,41 @@ public class Gps extends AppCompatActivity
                 }
             }
         }
+    }
+
+    void saveText(String tag, String text) {
+        prefsEditor.putString(tag, text);
+        prefsEditor.commit();
+    }
+
+    String loadText(String tag) {
+        String savedText = appSharedPrefs.getString(tag, "");
+        return savedText;
+    }
+
+    private void drawCircle(LatLng point, double r){
+
+        // Instantiating CircleOptions to draw a circle around the marker
+        CircleOptions circleOptions = new CircleOptions();
+
+        // Specifying the center of the circle
+        circleOptions.center(point);
+
+        // Radius of the circle
+        circleOptions.radius(r);
+
+        // Border color of the circle
+        circleOptions.strokeColor(Color.BLACK);
+
+        // Fill color of the circle
+        circleOptions.fillColor(0x30ff0000);
+
+        // Border width of the circle
+        circleOptions.strokeWidth(2);
+
+        // Adding the circle to the GoogleMap
+        mMap.addCircle(circleOptions);
+
     }
 
     public double[] get_home(List<Address> addresses, double llat, double llong, double degree){

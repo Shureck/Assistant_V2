@@ -4,15 +4,20 @@ import android.app.AlertDialog;
 import android.bluetooth.BluetoothAdapter;
 import android.bluetooth.BluetoothDevice;
 import android.bluetooth.BluetoothSocket;
+import android.content.BroadcastReceiver;
+import android.content.Context;
 import android.content.DialogInterface;
 import android.content.Intent;
+import android.content.IntentFilter;
 import android.content.SharedPreferences;
 import android.os.Bundle;
 import android.os.Handler;
 import android.preference.PreferenceManager;
 import android.util.Log;
 import android.view.View;
+import android.widget.Button;
 import android.widget.CompoundButton;
+import android.widget.EditText;
 import android.widget.ImageView;
 import android.widget.LinearLayout;
 import android.widget.ListView;
@@ -20,19 +25,26 @@ import android.widget.Switch;
 import android.widget.Toast;
 
 import androidx.appcompat.app.AppCompatActivity;
+import androidx.localbroadcastmanager.content.LocalBroadcastManager;
 
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
 import java.util.ArrayList;
+
 import java.util.Set;
 import java.util.UUID;
+import java.util.regex.Pattern;
 
 public class Settings extends AppCompatActivity {
 
     private static final String TAG = "bluetooth2";
     private ConnectedThread mConnectedThread;
     //Handler h;
+    public SharedPreferences appSharedPrefs;
+    public SharedPreferences.Editor prefsEditor;
+    final String SAVED_TEXT = "saved_text";
+    final String SAVED_ADR = "saved_adr";
 
     private static final int REQUEST_ENABLE_BT = 1;
     final int RECIEVE_MESSAGE = 1;        // Статус для Handler
@@ -45,8 +57,12 @@ public class Settings extends AppCompatActivity {
     public ArrayList<BluetoothDevice> tmpBtChecker = new ArrayList<>();
     public Switch mSwitch;
 
-    public SharedPreferences appSharedPrefs;
-    public SharedPreferences.Editor prefsEditor;
+
+    public Button btn;
+    public Button btn2;
+    public EditText editText;
+    public EditText postEdit;
+    public EditText radiusEdit;
 
     public AlertDialog dialog;
     public LinearLayout set_menu, set_voice;
@@ -63,6 +79,12 @@ public class Settings extends AppCompatActivity {
         prefsEditor = appSharedPrefs.edit();
         boolean isSp = appSharedPrefs.getBoolean("isSpeak", false);
 
+        btn = (Button) findViewById(R.id.btn_phone);
+        btn2 = (Button) findViewById(R.id.btn_accept);
+        editText = (EditText) findViewById(R.id.editTextPhone1);
+        postEdit = (EditText) findViewById(R.id.postAdr);
+        radiusEdit = (EditText) findViewById(R.id.editRadius);
+
         set_menu = (LinearLayout) findViewById(R.id.list_bt);
         set_voice = (LinearLayout) findViewById(R.id.lin_ask);
         btAdapter = BluetoothAdapter.getDefaultAdapter();
@@ -72,26 +94,57 @@ public class Settings extends AppCompatActivity {
         mArrayAdapter = new ArrayList<>();
         mSwitch = (Switch) findViewById(R.id.isSpeak);
         mSwitch.setChecked(isSp);
-        /*
-        h = new Handler() {
-            public void handleMessage(android.os.Message msg) {
-                switch (msg.what) {
-                    case RECIEVE_MESSAGE:                                                   // если приняли сообщение в Handler
-                        byte[] readBuf = (byte[]) msg.obj;
-                        String strIncom = new String(readBuf, 0, msg.arg1);
-                        sb.append(strIncom);                                                // формируем строку
-                        int endOfLineIndex = sb.indexOf("\r\n");                            // определяем символы конца строки
-                        if (endOfLineIndex > 0) {                                            // если встречаем конец строки,
-                            String sbprint = sb.substring(0, endOfLineIndex);               // то извлекаем строку
-                            sb.delete(0, sb.length());                                      // и очищаем sb
-                            Toast.makeText(Settings.this,"Ответ от Arduino: " + sbprint, Toast.LENGTH_LONG).show();             // обновляем TextView
-                        }
-                        //Log.d(TAG, "...Строка:"+ sb.toString() +  "Байт:" + msg.arg1 + "...");
-                        break;
+
+        String ss = loadText(SAVED_TEXT);
+        if(ss != ""){
+            editText.setHint(ss);
+        }
+        ss = loadText(SAVED_ADR);
+        if(ss != ""){
+            postEdit.setHint(ss.substring(0,ss.indexOf('|')));
+            radiusEdit.setHint(ss.substring(ss.indexOf('|')+1,ss.length()));
+        }
+
+        btn.setOnClickListener(new View.OnClickListener() {
+            @Override
+            public void onClick(View view) {
+                String s = editText.getText().toString();
+                String reg = "^((8|\\+7)[\\- ]?)?(\\(?\\d{3}\\)?[\\- ]?)?[\\d\\- ]{7,10}$";
+                if (s != null && Pattern.matches(reg,s)){
+                    editText.setText("");
+                    saveText(SAVED_TEXT,s);
+                    editText.setHint(loadText(SAVED_TEXT));
+                    App.sendLocalBroadcastMessage("Номер",s);
                 }
-            };
-        };
-        */
+                else{
+                    editText.setText("");
+                    editText.setHint("Неверный формат");
+                }
+            }
+        });
+
+        btn2.setOnClickListener(new View.OnClickListener() {
+            @Override
+            public void onClick(View view) {
+                String sA = postEdit.getText().toString();
+                String sR = radiusEdit.getText().toString();
+                saveText(SAVED_ADR,sA+"|"+sR);
+                App.sendLocalBroadcastMessage("Address",sA+"|"+sR);
+                String ss = loadText(SAVED_ADR);
+                if(ss != ""){
+                    postEdit.setHint(ss.substring(0,ss.indexOf('|')));
+                    radiusEdit.setHint(ss.substring(ss.indexOf('|')+1,ss.length()));
+                }
+            }
+        });
+
+        LocalBroadcastManager.getInstance(getApplicationContext()).registerReceiver(new BroadcastReceiver() {
+            @Override
+            public void onReceive(Context context, Intent intent) {
+                String s = intent.getStringExtra("Result");
+                Toast.makeText(Settings.this, "Адрес "+ s + " установлен", Toast.LENGTH_LONG).show();
+            }
+        }, new IntentFilter("Address_back"));
 
         mSwitch.setOnCheckedChangeListener(new CompoundButton.OnCheckedChangeListener() {
             public void onCheckedChanged(CompoundButton buttonView, boolean isChecked) {
@@ -207,6 +260,15 @@ public class Settings extends AppCompatActivity {
         }
     }
 
+    void saveText(String tag, String text) {
+        prefsEditor.putString(tag, text);
+        prefsEditor.commit();
+    }
+
+    String loadText(String tag) {
+        String savedText = appSharedPrefs.getString(tag, "");
+        return savedText;
+    }
 
     private void im_init(){
         ImageView im_main = (ImageView) findViewById(R.id.imageView);
